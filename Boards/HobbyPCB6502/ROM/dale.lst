@@ -1,0 +1,955 @@
+
+; 64tass Turbo Assembler Macro V1.58.2974 listing file
+; 64tass.exe --intel-hex -L dale.lst --output=dale.hex cegmon.asm
+; Tue Mar 21 16:52:57 2023
+
+;Offset	;Hex		;Monitor	;Source
+
+;******  Processing input file: cegmon.asm
+
+=$0000					L0000           := $0000
+=$002e					L002E           := $002E
+=$00fd					L00FD           := $00FD
+=$00fe					L00FE           := $00FE        ; $00FE LOFROM store current address for most routines the from address in save move and tabular display
+=$0218					L0218           := $0218
+=$021a					L021A           := $021A
+=$021c					L021C           := $021C
+=$021e					L021E           := $021E
+=$0220					L0220           := $0220
+=$0227					L0227           := $0227
+=$022a					L022A           := $022A
+=$0233					L0233           := $0233        ; $0233 USERLO contains location of start of user routine called by machine code monitors U command
+=$2f44					L2F44           := $2F44
+=$415a					L415A           := $415A
+=$a34b					LA34B           := $A34B
+=$a374					LA374           := $A374
+=$a636					LA636           := $A636
+=$bf2d					LBF2D           := $BF2D
+=$d08c					LD08C           := $D08C
+.f800	a5 0e		lda $0e		LF800:  lda     $0E
+.f802	f0 06		beq $f80a	        beq     LF80A
+.f804	c6 0e		dec $0e		        dec     $0E
+.f806	f0 02		beq $f80a	        beq     LF80A
+.f808	c6 0e		dec $0e		        dec     $0E
+.f80a	a9 20		lda #$20	LF80A:  lda     #$20
+.f80c	8d 01 02	sta $0201	        sta     $0201           ; $0201 OLDCHR stores current character during SCREEN; exits containing char beneath the cursor
+.f80f	20 8f ff	jsr $ff8f	        jsr     LFF8F
+.f812	10 19		bpl $f82d	        bpl     LF82D
+.f814	38		sec		        sec
+.f815	ad 2b 02	lda $022b	        lda     $022B
+.f818	e9 40		sbc #$40	        sbc     #$40
+.f81a	8d 2b 02	sta $022b	        sta     $022B
+.f81d	ad 2c 02	lda $022c	        lda     $022C
+.f820	e9 00		sbc #$00	        sbc     #$00
+.f822	8d 2c 02	sta $022c	        sta     $022C
+.f825	20 cf fb	jsr $fbcf	        jsr     ENDCHK
+.f828	b0 03		bcs $f82d	        bcs     LF82D
+.f82a	20 d1 ff	jsr $ffd1	        jsr     CURHOM
+.f82d	8e 00 02	stx $0200	LF82D:  stx     $0200           ; $0200 CURDIS cursor displacement on current line
+.f830	20 88 ff	jsr $ff88	        jsr     LFF88
+.f833	4c d2 f8	jmp $f8d2	        jmp     LF8D2
+.f836	8d 02 02	sta $0202	SCREEN: sta     $0202           ; $F836 - SCREEN - new screen handler
+.f839	48		pha		        pha
+.f83a	8a		txa		        txa
+.f83b	48		pha		        pha
+.f83c	98		tya		        tya
+.f83d	48		pha		        pha
+.f83e	ad 02 02	lda $0202	        lda     $0202           ; $0202 NEWCHR park for new char for SCREEN
+.f841	d0 03		bne $f846	        bne     LF846
+.f843	4c d2 f8	jmp $f8d2	        jmp     LF8D2
+.f846	ac 06 02	ldy $0206	LF846:  ldy     $0206           ; $0206 SDELAY print-delay value for SCREEN delay is delay-value times approx. 400 machine-cycles (ie times 400 micro-seconds at 1MHz)
+.f849	f0 03		beq $f84e	        beq     LF84E
+.f84b	20 e1 fc	jsr $fce1	        jsr     DELAY2
+.f84e	c9 5f		cmp #$5f	LF84E:  cmp     #$5F
+.f850	f0 ae		beq $f800	        beq     LF800
+.f852	c9 0c		cmp #$0c	        cmp     #$0C
+.f854	d0 0b		bne $f861	        bne     LF861
+.f856	20 8c ff	jsr $ff8c	        jsr     SCOUT
+.f859	20 d1 ff	jsr $ffd1	        jsr     CURHOM
+.f85c	8e 00 02	stx $0200	        stx     $0200           ; $0200 CURDIS cursor displacement on current line
+.f85f	f0 6e		beq $f8cf	        beq     LF8CF
+.f861	c9 0a		cmp #$0a	LF861:  cmp     #$0A
+.f863	f0 27		beq $f88c	        beq     LF88C
+.f865	c9 1e		cmp #$1e	        cmp     #$1E
+.f867	f0 77		beq $f8e0	        beq     LF8E0
+.f869	c9 0b		cmp #$0b	        cmp     #$0B
+.f86b	f0 10		beq $f87d	        beq     LF87D
+.f86d	c9 1a		cmp #$1a	        cmp     #$1A
+.f86f	f0 67		beq $f8d8	        beq     LF8D8
+.f871	c9 0d		cmp #$0d	        cmp     #$0D
+.f873	d0 05		bne $f87a	        bne     LF87A
+.f875	20 6d ff	jsr $ff6d	        jsr     LFF6D
+.f878	d0 58		bne $f8d2	        bne     LF8D2
+.f87a	8d 01 02	sta $0201	LF87A:  sta     $0201           ; $0201 OLDCHR stores current character during SCREEN; exits containing char beneath the cursor
+.f87d	20 8c ff	jsr $ff8c	LF87D:  jsr     SCOUT
+.f880	ee 00 02	inc $0200	        inc     $0200           ; $0200 CURDIS cursor displacement on current line
+.f883	e8		inx		        inx
+.f884	ec 22 02	cpx $0222	        cpx     $0222
+.f887	30 46		bmi $f8cf	        bmi     LF8CF
+.f889	20 70 ff	jsr $ff70	        jsr     LFF70
+.f88c	20 8c ff	jsr $ff8c	LF88C:  jsr     SCOUT
+.f88f	a0 02		ldy #$02	        ldy     #$02
+.f891	20 d2 fb	jsr $fbd2	        jsr     LFBD2
+.f894	b0 08		bcs $f89e	        bcs     LF89E
+.f896	a2 03		ldx #$03	        ldx     #$03
+.f898	20 ee fd	jsr $fdee	        jsr     LFDEE
+.f89b	4c cf f8	jmp $f8cf	        jmp     LF8CF
+.f89e	20 28 fe	jsr $fe28	LF89E:  jsr     LFE28
+.f8a1	20 d1 ff	jsr $ffd1	        jsr     CURHOM
+.f8a4	20 ee fd	jsr $fdee	        jsr     LFDEE
+.f8a7	ae 22 02	ldx $0222	        ldx     $0222
+.f8aa	20 27 02	jsr $0227	LF8AA:  jsr     L0227
+.f8ad	10 fb		bpl $f8aa	        bpl     LF8AA
+.f8af	e8		inx		        inx
+.f8b0	20 ee fd	jsr $fdee	        jsr     LFDEE
+.f8b3	a2 03		ldx #$03	        ldx     #$03
+.f8b5	20 ee fd	jsr $fdee	        jsr     LFDEE
+.f8b8	20 cf fb	jsr $fbcf	        jsr     ENDCHK
+.f8bb	90 ed		bcc $f8aa	        bcc     LF8AA
+.f8bd	a9 20		lda #$20	        lda     #$20
+.f8bf	20 2a 02	jsr $022a	LF8BF:  jsr     L022A
+.f8c2	10 fb		bpl $f8bf	        bpl     LF8BF
+.f8c4	a2 01		ldx #$01	        ldx     #$01
+.f8c6	bd 23 02	lda $0223,x	LF8C6:  lda     $0223,x
+.f8c9	9d 28 02	sta $0228,x	        sta     $0228,x
+.f8cc	ca		dex		        dex
+.f8cd	10 f7		bpl $f8c6	        bpl     LF8C6
+.f8cf	20 75 ff	jsr $ff75	LF8CF:  jsr     LFF75
+.f8d2	68		pla		LF8D2:  pla
+.f8d3	a8		tay		        tay
+.f8d4	68		pla		        pla
+.f8d5	aa		tax		        tax
+.f8d6	68		pla		        pla
+.f8d7	60		rts		        rts
+.f8d8	20 59 fe	jsr $fe59	LF8D8:  jsr     SCNCLR
+.f8db	8d 01 02	sta $0201	        sta     $0201           ; $0201 OLDCHR stores current character during SCREEN; exits containing char beneath the cursor
+.f8de	f0 24		beq $f904	        beq     LF904
+.f8e0	a9 20		lda #$20	LF8E0:  lda     #$20
+.f8e2	20 8f ff	jsr $ff8f	        jsr     LFF8F
+.f8e5	20 d1 ff	jsr $ffd1	        jsr     CURHOM
+.f8e8	ae 22 02	ldx $0222	LF8E8:  ldx     $0222
+.f8eb	a9 20		lda #$20	        lda     #$20
+.f8ed	20 2a 02	jsr $022a	LF8ED:  jsr     L022A
+.f8f0	10 fb		bpl $f8ed	        bpl     LF8ED
+.f8f2	8d 01 02	sta $0201	        sta     $0201           ; $0201 OLDCHR stores current character during SCREEN; exits containing char beneath the cursor
+.f8f5	a0 02		ldy #$02	        ldy     #$02
+.f8f7	20 d2 fb	jsr $fbd2	        jsr     LFBD2
+.f8fa	b0 08		bcs $f904	        bcs     LF904
+.f8fc	a2 03		ldx #$03	        ldx     #$03
+.f8fe	20 ee fd	jsr $fdee	        jsr     LFDEE
+.f901	4c e8 f8	jmp $f8e8	        jmp     LF8E8
+.f904	20 d1 ff	jsr $ffd1	LF904:  jsr     CURHOM
+.f907	8e 00 02	stx $0200	        stx     $0200           ; $0200 CURDIS cursor displacement on current line
+.f90a	f0 c6		beq $f8d2	        beq     LF8D2
+.f90c	20 a6 f9	jsr $f9a6	LF90C:  jsr     TWOQAD
+.f90f	20 f5 fb	jsr $fbf5	LF90F:  jsr     CRLF
+.f912	20 b6 fe	jsr $feb6	        jsr     QDDATD
+.f915	20 e6 fb	jsr $fbe6	        jsr     SPCOUT
+.f918	20 e0 fb	jsr $fbe0	        jsr     LFBE0
+.f91b	a2 08		ldx #$08	        ldx     #$08
+.f91d	86 fd		stx $fd		        stx     L00FD
+.f91f	20 e6 fb	jsr $fbe6	LF91F:  jsr     SPCOUT
+.f922	20 f0 fe	jsr $fef0	        jsr     PRBYTE
+.f925	20 eb fb	jsr $fbeb	        jsr     NOTEND
+.f928	b0 51		bcs $f97b	        bcs     LF97B
+.f92a	20 f9 fe	jsr $fef9	        jsr     BUMP
+.f92d	c6 fd		dec $fd		        dec     L00FD
+.f92f	d0 ee		bne $f91f	        bne     LF91F
+.f931	f0 dc		beq $f90f	        beq     LF90F
+.f933	20 bd ff	jsr $ffbd	LF933:  jsr     TRIQAD
+.f936	20 e4 fd	jsr $fde4	        jsr     LFDE4
+.f939	b0 43		bcs $f97e	        bcs     MSTART
+.f93b	a6 e4		ldx $e4		LF93B:  ldx     $E4             ; Break table K register - stack pointer
+.f93d	9a		txs		        txs
+.f93e	a5 e6		lda $e6		        lda     $E6             ; Break table PCH - high byte of program counter
+.f940	48		pha		        pha
+.f941	a5 e5		lda $e5		        lda     $E5             ; Break table PCL - low byte of program counter
+.f943	48		pha		        pha
+.f944	a5 e3		lda $e3		        lda     $E3             ; Break table P register - processor status flags, in hexadecimal form
+.f946	48		pha		        pha
+.f947	a5 e0		lda $e0		        lda     $E0             ; Break table A register - accumulator
+.f949	a6 e1		ldx $e1		        ldx     $E1             ; Break table X register
+.f94b	a4 e2		ldy $e2		        ldy     $E2             ; Break table Y register
+.f94d	40		rti		        rti
+.f94e	a2 03		ldx #$03	LF94E:  ldx     #$03
+.f950	bd 4b fa	lda $fa4b,x	LF950:  lda     LFA4B,x
+.f953	9d 34 02	sta $0234,x	        sta     $0234,x         ; $0233 USERHI contains location of start of user routine called by machine code monitors U command
+.f956	ca		dex		        dex
+.f957	d0 f7		bne $f950	        bne     LF950
+.f959	20 8d fe	jsr $fe8d	        jsr     GETNEW
+.f95c	20 b5 f9	jsr $f9b5	        jsr     GETQDE
+.f95f	b1 fe		lda ($fe),y	        lda     (L00FE),y       ; $00FE LOFROM store current address for most routines the from address in save move
+.f961	85 e7		sta $e7		        sta     $E7
+.f963	98		tya		        tya
+.f964	91 fe		sta ($fe),y	        sta     (L00FE),y       ; $00FE LOFROM store current address for most routines the from address in save move
+.f966	f0 16		beq $f97e	        beq     MSTART
+.f968	4c 7e fa	jmp $fa7e	LF968:  jmp     SAVEMC
+.f96b	c6 fb		dec $fb		LF96B:  dec     $FB
+.f96d	d0 79		bne $f9e8	        bne     LF9E8
+.f96f	f0 9b		beq $f90c	LF96F:  beq     LF90C
+.f971	60		rts		LF971:  rts
+.f972	a5 fb		lda $fb		LF972:  lda     $FB
+.f974	d0 fb		bne $f971	        bne     LF971
+.f976	a9 3f		lda #$3f	        lda     #$3F
+.f978	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.f97b	a2 28		ldx #$28	LF97B:  ldx     #$28
+.f97d	9a		txs		        txs
+.f97e	20 f5 fb	jsr $fbf5	MSTART: jsr     CRLF            ; $F97E MSTART entry to command/address mode
+.f981	a0 00		ldy #$00	        ldy     #$00
+.f983	84 fb		sty $fb		        sty     $FB
+.f985	20 e0 fb	jsr $fbe0	        jsr     LFBE0
+.f988	20 8d fe	jsr $fe8d	LF988:  jsr     GETNEW
+.f98b	c9 4d		cmp #$4d	        cmp     #$4D
+.f98d	f0 a4		beq $f933	        beq     LF933
+.f98f	c9 52		cmp #$52	        cmp     #$52
+.f991	f0 a8		beq $f93b	        beq     LF93B
+.f993	c9 5a		cmp #$5a	        cmp     #$5A
+.f995	f0 b7		beq $f94e	        beq     LF94E
+.f997	c9 53		cmp #$53	        cmp     #$53
+.f999	f0 cd		beq $f968	        beq     LF968
+.f99b	c9 4c		cmp #$4c	        cmp     #$4C
+.f99d	f0 cc		beq $f96b	        beq     LF96B
+.f99f	c9 55		cmp #$55	        cmp     #$55
+.f9a1	d0 33		bne $f9d6	        bne     LF9D6
+.f9a3	6c 33 02	jmp ($0233)	        jmp     (L0233)
+.f9a6	20 8d fe	jsr $fe8d	TWOQAD: jsr     GETNEW          ; $F9A6 TWOQAD - collect two addresses first stored in (FE) pair, second in (F9)
+.f9a9	20 b5 f9	jsr $f9b5	        jsr     GETQDE
+.f9ac	20 e3 fb	jsr $fbe3	        jsr     LFBE3
+.f9af	a2 00		ldx #$00	        ldx     #$00
+.f9b1	20 8d fe	jsr $fe8d	LF9B1:  jsr     GETNEW
+>f9b4	2c				        .byte   $2C
+.f9b5	a2 05		ldx #$05	GETQDE: ldx     #$05            ; $F9B5 GETQDE - collect address, store in (FE). Note call GETNEW first!
+.f9b7	20 c0 f9	jsr $f9c0	        jsr     LF9C0
+.f9ba	20 8d fe	jsr $fe8d	        jsr     GETNEW
+>f9bd	2c				        .byte   $2C
+.f9be	a2 03		ldx #$03	GETPRC: ldx     #$03            ; $F9BE GETPRC collect hex pair for data byte, store in FC: Note call GETNEW first!
+.f9c0	20 c6 f9	jsr $f9c6	LF9C0:  jsr     LF9C6
+.f9c3	20 8d fe	jsr $fe8d	        jsr     GETNEW
+.f9c6	c9 2e		cmp #$2e	LF9C6:  cmp     #$2E
+.f9c8	f0 be		beq $f988	        beq     LF988
+.f9ca	c9 2f		cmp #$2f	        cmp     #$2F
+.f9cc	f0 1a		beq $f9e8	        beq     LF9E8
+.f9ce	20 93 fe	jsr $fe93	        jsr     ASCHEX
+.f9d1	30 9f		bmi $f972	        bmi     LF972
+.f9d3	4c da fe	jmp $feda	        jmp     ROLSTR
+.f9d6	c9 54		cmp #$54	LF9D6:  cmp     #$54
+.f9d8	f0 95		beq $f96f	        beq     LF96F
+.f9da	20 b5 f9	jsr $f9b5	        jsr     GETQDE
+.f9dd	a9 2f		lda #$2f	LF9DD:  lda     #$2F
+.f9df	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.f9e2	20 f0 fe	jsr $fef0	        jsr     PRBYTE
+.f9e5	20 e6 fb	jsr $fbe6	        jsr     SPCOUT
+.f9e8	20 8d fe	jsr $fe8d	LF9E8:  jsr     GETNEW
+.f9eb	c9 47		cmp #$47	        cmp     #$47
+.f9ed	d0 03		bne $f9f2	        bne     LF9F2
+.f9ef	6c fe 00	jmp ($00fe)	        jmp     (L00FE)         ; $00FE LOFROM store current address for most routines the from address in save move
+.f9f2	c9 2c		cmp #$2c	LF9F2:  cmp     #$2C
+.f9f4	d0 06		bne $f9fc	        bne     LF9FC
+.f9f6	20 f9 fe	jsr $fef9	        jsr     BUMP
+.f9f9	4c e8 f9	jmp $f9e8	        jmp     LF9E8
+.f9fc	c9 0a		cmp #$0a	LF9FC:  cmp     #$0A
+.f9fe	f0 16		beq $fa16	        beq     LFA16
+.fa00	c9 0d		cmp #$0d	        cmp     #$0D
+.fa02	f0 17		beq $fa1b	        beq     LFA1B
+.fa04	c9 5e		cmp #$5e	        cmp     #$5E
+.fa06	f0 19		beq $fa21	        beq     LFA21
+.fa08	c9 27		cmp #$27	        cmp     #$27
+.fa0a	f0 2e		beq $fa3a	        beq     LFA3A
+.fa0c	20 be f9	jsr $f9be	        jsr     GETPRC
+.fa0f	a5 fc		lda $fc		        lda     $FC
+.fa11	91 fe		sta ($fe),y	        sta     (L00FE),y       ; $00FE LOFROM store current address for most routines the from address in save move
+.fa13	4c e8 f9	jmp $f9e8	LFA13:  jmp     LF9E8
+.fa16	a9 0d		lda #$0d	LFA16:  lda     #$0D
+.fa18	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.fa1b	20 f9 fe	jsr $fef9	LFA1B:  jsr     BUMP
+.fa1e	4c 31 fa	jmp $fa31	        jmp     LFA31
+.fa21	38		sec		LFA21:  sec
+.fa22	a5 fe		lda $fe		        lda     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.fa24	e9 01		sbc #$01	        sbc     #$01
+.fa26	85 fe		sta $fe		        sta     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.fa28	a5 ff		lda $ff		        lda     $FF
+.fa2a	e9 00		sbc #$00	        sbc     #$00
+.fa2c	85 ff		sta $ff		        sta     $FF
+.fa2e	20 f5 fb	jsr $fbf5	DATALN: jsr     CRLF            ; $FA2E - DATALN entry to data-mode loop - prints current address and its contents
+.fa31	20 b6 fe	jsr $feb6	LFA31:  jsr     QDDATD
+.fa34	4c dd f9	jmp $f9dd	        jmp     LF9DD
+.fa37	20 f7 fe	jsr $fef7	        jsr     LFEF7
+.fa3a	20 8d fe	jsr $fe8d	LFA3A:  jsr     GETNEW
+.fa3d	c9 27		cmp #$27	        cmp     #$27
+.fa3f	d0 05		bne $fa46	        bne     LFA46
+.fa41	20 e3 fb	jsr $fbe3	        jsr     LFBE3
+.fa44	d0 cd		bne $fa13	        bne     LFA13
+.fa46	c9 0d		cmp #$0d	LFA46:  cmp     #$0D
+.fa48	f0 e4		beq $fa2e	        beq     DATALN
+>fa4a	d0				        .byte   $D0
+>fa4b	eb				LFA4B:  .byte   $EB
+.fa4c	4c 4f fa	jmp $fa4f	        jmp     LFA4F
+.fa4f	85 e0		sta $e0		LFA4F:  sta     $E0             ; Break table A register - accumulator
+.fa51	68		pla		        pla
+.fa52	48		pha		        pha
+.fa53	29 10		and #$10	        and     #$10
+.fa55	d0 03		bne $fa5a	        bne     LFA5A
+.fa57	a5 e0		lda $e0		        lda     $E0             ; Break table A register - accumulator
+.fa59	40		rti		        rti
+.fa5a	86 e1		stx $e1		LFA5A:  stx     $E1             ; Break table X register
+.fa5c	84 e2		sty $e2		        sty     $E2             ; Break table Y register
+.fa5e	68		pla		        pla
+.fa5f	85 e3		sta $e3		        sta     $E3             ; Break table P register - processor status flags, in hexadecimal form
+.fa61	d8		cld		        cld
+.fa62	38		sec		        sec
+.fa63	68		pla		        pla
+.fa64	e9 02		sbc #$02	        sbc     #$02
+.fa66	85 e5		sta $e5		        sta     $E5             ; Break table PCL - low byte of program counter
+.fa68	68		pla		        pla
+.fa69	e9 00		sbc #$00	        sbc     #$00
+.fa6b	85 e6		sta $e6		        sta     $E6             ; Break table PCH - high byte of program counter
+.fa6d	ba		tsx		        tsx
+.fa6e	86 e4		stx $e4		        stx     $E4             ; Break table K register - stack pointer
+.fa70	a0 00		ldy #$00	        ldy     #$00
+.fa72	a5 e7		lda $e7		        lda     $E7
+.fa74	91 e5		sta ($e5),y	        sta     ($E5),y         ; Break table PCL - low byte of program counter
+.fa76	a9 e0		lda #$e0	        lda     #$E0            ; Break table A register - accumulator
+.fa78	85 fe		sta $fe		        sta     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.fa7a	84 ff		sty $ff		        sty     $FF
+.fa7c	d0 b0		bne $fa2e	        bne     DATALN
+.fa7e	20 bd ff	jsr $ffbd	SAVEMC: jsr     TRIQAD          ; $FA7E - SAVEMC
+.fa81	20 f7 ff	jsr $fff7	        jsr     SVVEC
+.fa84	20 e9 fe	jsr $fee9	        jsr     GETCHR
+.fa87	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.fa8a	20 e3 ff	jsr $ffe3	        jsr     LFFE3
+.fa8d	a9 2f		lda #$2f	        lda     #$2F
+.fa8f	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.fa92	d0 03		bne $fa97	        bne     LFA97
+.fa94	20 f9 fe	jsr $fef9	LFA94:  jsr     BUMP
+.fa97	20 f0 fe	jsr $fef0	LFA97:  jsr     PRBYTE
+.fa9a	a9 0d		lda #$0d	        lda     #$0D
+.fa9c	20 b1 fc	jsr $fcb1	        jsr     TAPOUT
+.fa9f	20 eb fb	jsr $fbeb	        jsr     NOTEND
+.faa2	90 f0		bcc $fa94	        bcc     LFA94
+.faa4	a5 e4		lda $e4		        lda     $E4             ; Break table K register - stack pointer
+.faa6	a6 e5		ldx $e5		        ldx     $E5             ; Break table PCL - low byte of program counter
+.faa8	85 fe		sta $fe		        sta     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.faaa	86 ff		stx $ff		        stx     $FF
+.faac	20 e3 ff	jsr $ffe3	        jsr     LFFE3
+.faaf	a9 47		lda #$47	        lda     #$47
+.fab1	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.fab4	20 ac ff	jsr $ffac	        jsr     LFFAC
+.fab7	8c 05 02	sty $0205	        sty     $0205           ; $0205 SVFLAG BASIC save flag 0=skip save, 1=enable save to ACIA
+.faba	4c 7e f9	jmp $f97e	        jmp     MSTART          ; entry to command/address mode
+.fabd	8a		txa		EDITOR: txa                     ; $FABD - entry to screen editor
+.fabe	48		pha		        pha
+.fabf	98		tya		        tya
+.fac0	48		pha		        pha
+.fac1	ad 04 02	lda $0204	        lda     $0204           ; $0204 EDFLAG Editor flag 00-disable edit cursor, ff-enabe edit cursor
+.fac4	10 59		bpl $fb1f	        bpl     LFB1F
+.fac6	ac 2f 02	ldy $022f	LFAC6:  ldy     $022F           ; $022F DISP edit-cursor displacement from start of editors current line
+.fac9	ad 31 02	lda $0231	        lda     $0231           ; $0231 CURSLO contain start of edit cursors current line on screen
+.facc	85 e4		sta $e4		        sta     $E4             ; Break table K register - stack pointer
+.face	ad 32 02	lda $0232	        lda     $0232           ; $0232 CURSHI contain start of edit cursors current line on screen
+.fad1	85 e5		sta $e5		        sta     $E5             ; Break table PCL - low byte of program counter
+.fad3	b1 e4		lda ($e4),y	        lda     ($E4),y         ; Break table K register - stack pointer
+.fad5	8d 30 02	sta $0230	        sta     $0230           ; $0230 CURCHR store for char beneath edit cursor
+.fad8	a9 a1		lda #$a1	        lda     #$A1
+.fada	91 e4		sta ($e4),y	        sta     ($E4),y         ; Break table K register - stack pointer
+.fadc	20 00 fd	jsr $fd00	        jsr     GETKEY
+.fadf	ad 30 02	lda $0230	        lda     $0230           ; $0230 CURCHR store for char beneath edit cursor
+.fae2	91 e4		sta ($e4),y	        sta     ($E4),y         ; Break table K register - stack pointer
+.fae4	ad 15 02	lda $0215	        lda     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fae7	c9 11		cmp #$11	        cmp     #$11
+.fae9	f0 28		beq $fb13	        beq     LFB13
+.faeb	c9 01		cmp #$01	        cmp     #$01
+.faed	f0 1e		beq $fb0d	        beq     LFB0D
+.faef	c9 04		cmp #$04	        cmp     #$04
+.faf1	f0 14		beq $fb07	        beq     LFB07
+.faf3	c9 13		cmp #$13	        cmp     #$13
+.faf5	f0 0a		beq $fb01	        beq     LFB01
+.faf7	c9 06		cmp #$06	        cmp     #$06
+.faf9	d0 27		bne $fb22	        bne     LFB22
+.fafb	20 7c fb	jsr $fb7c	        jsr     LFB7C
+.fafe	4c c6 fa	jmp $fac6	        jmp     LFAC6
+.fb01	20 28 fe	jsr $fe28	LFB01:  jsr     LFE28
+.fb04	4c c6 fa	jmp $fac6	        jmp     LFAC6
+.fb07	20 6b fb	jsr $fb6b	LFB07:  jsr     LFB6B
+.fb0a	4c c6 fa	jmp $fac6	        jmp     LFAC6
+.fb0d	20 19 fe	jsr $fe19	LFB0D:  jsr     LFE19
+.fb10	4c c6 fa	jmp $fac6	        jmp     LFAC6
+.fb13	ad 30 02	lda $0230	LFB13:  lda     $0230           ; $0230 CURCHR store for char beneath edit cursor
+.fb16	8d 15 02	sta $0215	        sta     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fb19	20 6b fb	jsr $fb6b	        jsr     LFB6B
+.fb1c	4c 43 fb	jmp $fb43	        jmp     LFB43
+.fb1f	20 00 fd	jsr $fd00	LFB1F:  jsr     GETKEY
+.fb22	c9 05		cmp #$05	LFB22:  cmp     #$05
+.fb24	d0 1d		bne $fb43	        bne     LFB43
+.fb26	ad 04 02	lda $0204	        lda     $0204           ; $0204 EDFLAG Editor flag 00-disable edit cursor, ff-enabe edit cursor
+.fb29	49 ff		eor #$ff	        eor     #$FF
+.fb2b	8d 04 02	sta $0204	        sta     $0204           ; $0204 EDFLAG Editor flag 00-disable edit cursor, ff-enabe edit cursor
+.fb2e	10 ef		bpl $fb1f	        bpl     LFB1F
+.fb30	ad 2b 02	lda $022b	        lda     $022B
+.fb33	8d 31 02	sta $0231	        sta     $0231           ; $0231 CURSLO contain start of edit cursors current line on screen
+.fb36	ad 2c 02	lda $022c	        lda     $022C
+.fb39	8d 32 02	sta $0232	        sta     $0232           ; $0232 CURSHI contain start of edit cursors current line on screen
+.fb3c	a2 00		ldx #$00	        ldx     #$00
+.fb3e	8e 2f 02	stx $022f	        stx     $022F           ; $022F DISP edit-cursor displacement from start of editors current line
+.fb41	f0 83		beq $fac6	        beq     LFAC6
+.fb43	4c d3 fd	jmp $fdd3	LFB43:  jmp     LFDD3
+.fb46	2c 03 02	bit $0203	        bit     $0203           ; $FB46 - Input vector points to there??? - seems off???
+.fb49	10 1d		bpl $fb68	        bpl     LFB68
+.fb4b	a9 fd		lda #$fd	LFB4B:  lda     #$FD
+.fb4d	8d 00 df	sta $df00	        sta     $DF00
+.fb50	a9 10		lda #$10	        lda     #$10
+.fb52	2c 00 df	bit $df00	        bit     $DF00
+.fb55	f0 0a		beq $fb61	        beq     LFB61
+.fb57	ad 00 f0	lda $f000	TAPIN:  lda     $F000           ; TAPIN - collects char from ACIA exits via EDITOR if SPACE hit.
+.fb5a	4a		lsr a		        lsr     a
+.fb5b	90 ee		bcc $fb4b	        bcc     LFB4B
+.fb5d	ad 01 f0	lda $f001	        lda     $F001
+.fb60	60		rts		        rts
+.fb61	a9 00		lda #$00	LFB61:  lda     #$00
+.fb63	85 fb		sta $fb		        sta     $FB
+.fb65	8d 03 02	sta $0203	        sta     $0203           ; $0203 LDFLAG BASIC load flag 00=no load, FF-load from ACIA
+.fb68	4c bd fa	jmp $fabd	LFB68:  jmp     EDITOR
+.fb6b	ae 22 02	ldx $0222	LFB6B:  ldx     $0222
+.fb6e	ec 2f 02	cpx $022f	        cpx     $022F           ; $022F DISP edit-cursor displacement from start of editors current line
+.fb71	f0 04		beq $fb77	        beq     LFB77
+.fb73	ee 2f 02	inc $022f	        inc     $022F           ; $022F DISP edit-cursor displacement from start of editors current line
+.fb76	60		rts		        rts
+.fb77	a2 00		ldx #$00	LFB77:  ldx     #$00
+.fb79	8e 2f 02	stx $022f	        stx     $022F           ; $022F DISP edit-cursor displacement from start of editors current line
+.fb7c	18		clc		LFB7C:  clc
+.fb7d	ad 31 02	lda $0231	        lda     $0231           ; $0231 CURSLO contain start of edit cursors current line on screen
+.fb80	69 40		adc #$40	        adc     #$40
+.fb82	8d 31 02	sta $0231	        sta     $0231           ; $0231 CURSLO contain start of edit cursors current line on screen
+.fb85	ad 32 02	lda $0232	        lda     $0232           ; $0232 CURSHI contain start of edit cursors current line on screen
+.fb88	69 00		adc #$00	        adc     #$00
+.fb8a	c9 d8		cmp #$d8	        cmp     #$D8
+.fb8c	d0 02		bne $fb90	        bne     LFB90
+.fb8e	a9 d0		lda #$d0	        lda     #$D0
+.fb90	8d 32 02	sta $0232	LFB90:  sta     $0232           ; $0232 CURSHI contain start of edit cursors current line on screen
+.fb93	60		rts		LFB93:  rts
+.fb94	ad 12 02	lda $0212	        lda     $0212           ; $0212 CCFLAG BASIC CTRL-C flag 00-enables CTRL-C break, 01-disables CTRL-C break
+.fb97	d0 fa		bne $fb93	        bne     LFB93
+.fb99	a9 fe		lda #$fe	        lda     #$FE
+.fb9b	8d 00 df	sta $df00	        sta     $DF00
+.fb9e	2c 00 df	bit $df00	        bit     $DF00
+.fba1	70 f0		bvs $fb93	        bvs     LFB93
+.fba3	a9 fb		lda #$fb	        lda     #$FB
+.fba5	8d 00 df	sta $df00	        sta     $DF00
+.fba8	2c 00 df	bit $df00	        bit     $DF00
+.fbab	70 e6		bvs $fb93	        bvs     LFB93
+.fbad	a9 03		lda #$03	        lda     #$03
+.fbaf	4c 36 a6	jmp $a636	        jmp     LA636
+.fbb2	46 fb		lsr $fb		LFBB2:  lsr     $FB
+>fbb4	9b				        .byte   $9B
+>fbb5	ff				        .byte   $FF
+.fbb6	94 fb		sty $fb,x	        sty     $FB,x
+.fbb8	70 fe		bvs $fbb8	LFBB8:  bvs     LFBB8
+>fbba	7b				        .byte   $7B
+.fbbb	fe 3f 80	inc $803f,x	        inc     $803F,x
+.fbbe	d0 40		bne $fc00	        bne     DISK            ; $FC00 is DISK
+>fbc0	d7				        .byte   $D7
+.fbc1	bd 8c d0	lda $d08c,x	        lda     LD08C,x
+.fbc4	9d 8c d0	sta $d08c,x	        sta     LD08C,x
+.fbc7	ca		dex		        dex
+.fbc8	60		rts		        rts
+.fbc9	00		brk #		        brk
+.fbca	20 8c d0	jsr $d08c	        jsr     LD08C
+.fbcd	88		dey		        dey
+>fbce	f9				        .byte   $F9
+.fbcf	ae 22 02	ldx $0222	ENDCHK:  ldx     $0222          ; $FBCF ENDCHK - checks if top or base of screen overshot - it Y=0, carry clear if top overshot, if Y=2, carry set if base overshot
+.fbd2	38		sec		LFBD2:  sec
+.fbd3	ad 2b 02	lda $022b	        lda     $022B
+.fbd6	f9 23 02	sbc $0223,y	        sbc     $0223,y
+.fbd9	ad 2c 02	lda $022c	        lda     $022C
+.fbdc	f9 24 02	sbc $0224,y	        sbc     $0224,y
+.fbdf	60		rts		        rts
+.fbe0	a9 3e		lda #$3e	LFBE0:  lda     #$3E
+>fbe2	2c				        .byte   $2C
+.fbe3	a9 2c		lda #$2c	LFBE3:  lda     #$2C
+>fbe5	2c				        .byte   $2C
+.fbe6	a9 20		lda #$20	SPCOUT: lda     #$20            ; $FBE6 SPCOUT print ASCII space to display
+.fbe8	4c ee ff	jmp $ffee	        jmp     OUTVEC
+.fbeb	38		sec		NOTEND: sec                     ; $FBEB NOTEND compare (FE) with (F9) carry clear if (FE) is less
+.fbec	a5 fe		lda $fe		        lda     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.fbee	e5 f9		sbc $f9		        sbc     $F9
+.fbf0	a5 ff		lda $ff		        lda     $FF
+.fbf2	e5 fa		sbc $fa		        sbc     $FA
+.fbf4	60		rts		        rts
+.fbf5	a9 0d		lda #$0d	CRLF:   lda     #$0D            ; $FBF5 CRLF print carriage-return/line-feed to display
+.fbf7	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.fbfa	a9 0a		lda #$0a	        lda     #$0A
+.fbfc	4c ee ff	jmp $ffee	        jmp     OUTVEC
+.fbff	40		rti		        rti
+.fc00	20 0c fc	jsr $fc0c	DISK:   jsr     LFC0C           ; $FC00 DISK entry to disc bootstrap
+.fc03	6c fd 00	jmp ($00fd)	        jmp     (L00FD)
+.fc06	20 0c fc	jsr $fc0c	        jsr     LFC0C
+.fc09	4c 00 fe	jmp $fe00	        jmp     NEWMON
+.fc0c	a0 00		ldy #$00	LFC0C:  ldy     #$00
+.fc0e	8c 01 c0	sty $c001	        sty     $C001
+.fc11	8c 00 c0	sty $c000	        sty     $C000
+.fc14	a2 04		ldx #$04	        ldx     #$04
+.fc16	8e 01 c0	stx $c001	        stx     $C001
+.fc19	8c 03 c0	sty $c003	        sty     $C003
+.fc1c	88		dey		        dey
+.fc1d	8c 02 c0	sty $c002	        sty     $C002
+.fc20	8e 03 c0	stx $c003	        stx     $C003
+.fc23	8c 02 c0	sty $c002	        sty     $C002
+.fc26	a9 fb		lda #$fb	        lda     #$FB
+.fc28	d0 09		bne $fc33	        bne     LFC33
+.fc2a	a9 02		lda #$02	LFC2A:  lda     #$02
+.fc2c	2c 00 c0	bit $c000	        bit     $C000
+.fc2f	f0 1c		beq $fc4d	        beq     LFC4D
+.fc31	a9 ff		lda #$ff	        lda     #$FF
+.fc33	8d 02 c0	sta $c002	LFC33:  sta     $C002
+.fc36	20 a5 fc	jsr $fca5	        jsr     LFCA5
+.fc39	29 f7		and #$f7	        and     #$F7
+.fc3b	8d 02 c0	sta $c002	        sta     $C002
+.fc3e	20 a5 fc	jsr $fca5	        jsr     LFCA5
+.fc41	09 08		ora #$08	        ora     #$08
+.fc43	8d 02 c0	sta $c002	        sta     $C002
+.fc46	a2 18		ldx #$18	        ldx     #$18
+.fc48	20 91 fc	jsr $fc91	        jsr     LFC91
+.fc4b	f0 dd		beq $fc2a	        beq     LFC2A
+.fc4d	a2 7f		ldx #$7f	LFC4D:  ldx     #$7F
+.fc4f	8e 02 c0	stx $c002	        stx     $C002
+.fc52	20 91 fc	jsr $fc91	        jsr     LFC91
+.fc55	ad 00 c0	lda $c000	LFC55:  lda     $C000
+.fc58	30 fb		bmi $fc55	        bmi     LFC55
+.fc5a	ad 00 c0	lda $c000	LFC5A:  lda     $C000
+.fc5d	10 fb		bpl $fc5a	        bpl     LFC5A
+.fc5f	a9 03		lda #$03	        lda     #$03
+.fc61	8d 10 c0	sta $c010	        sta     $C010
+.fc64	a9 58		lda #$58	        lda     #$58
+.fc66	8d 10 c0	sta $c010	        sta     $C010
+.fc69	20 9c fc	jsr $fc9c	        jsr     LFC9C
+.fc6c	85 fe		sta $fe		        sta     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.fc6e	aa		tax		        tax
+.fc6f	20 9c fc	jsr $fc9c	        jsr     LFC9C
+.fc72	85 fd		sta $fd		        sta     L00FD
+.fc74	20 9c fc	jsr $fc9c	        jsr     LFC9C
+.fc77	85 ff		sta $ff		        sta     $FF
+.fc79	a0 00		ldy #$00	        ldy     #$00
+.fc7b	20 9c fc	jsr $fc9c	LFC7B:  jsr     LFC9C
+.fc7e	91 fd		sta ($fd),y	        sta     (L00FD),y
+.fc80	c8		iny		        iny
+.fc81	d0 f8		bne $fc7b	        bne     LFC7B
+.fc83	e6 fe		inc $fe		        inc     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.fc85	c6 ff		dec $ff		        dec     $FF
+.fc87	d0 f2		bne $fc7b	        bne     LFC7B
+.fc89	86 fe		stx $fe		        stx     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.fc8b	a9 ff		lda #$ff	        lda     #$FF
+.fc8d	8d 02 c0	sta $c002	        sta     $C002
+.fc90	60		rts		        rts
+.fc91	a0 f8		ldy #$f8	LFC91:  ldy     #$F8
+.fc93	88		dey		LFC93:  dey
+.fc94	d0 fd		bne $fc93	        bne     LFC93
+.fc96	55 ff		eor $ff,x	        eor     $FF,x
+.fc98	ca		dex		        dex
+.fc99	d0 f6		bne $fc91	        bne     LFC91
+.fc9b	60		rts		        rts
+.fc9c	ad 10 c0	lda $c010	LFC9C:  lda     $C010
+.fc9f	4a		lsr a		        lsr     a
+.fca0	90 fa		bcc $fc9c	        bcc     LFC9C
+.fca2	ad 11 c0	lda $c011	        lda     $C011
+.fca5	60		rts		LFCA5:  rts
+.fca6	a9 03		lda #$03	RSACIA: lda     #$03            ; $FCA6 - RSACIA initialize ACIA
+.fca8	8d 00 f0	sta $f000	        sta     $F000
+.fcab	a9 11		lda #$11	        lda     #$11
+.fcad	8d 00 f0	sta $f000	        sta     $F000
+.fcb0	60		rts		        rts
+.fcb1	48		pha		TAPOUT: pha                     ; $FCB1 - output to tape
+.fcb2	ad 00 f0	lda $f000	LFCB2:  lda     $F000
+.fcb5	4a		lsr a		        lsr     a
+.fcb6	4a		lsr a		        lsr     a
+.fcb7	90 f9		bcc $fcb2	        bcc     LFCB2
+.fcb9	68		pla		        pla
+.fcba	8d 01 f0	sta $f001	        sta     $F001
+.fcbd	60		rts		        rts
+.fcbe	49 ff		eor #$ff	KEYWRT: eor     #$FF            ; $FCBE - KEYWRT write-to-keyboard invert for C1
+.fcc0	8d 00 df	sta $df00	        sta     $DF00
+.fcc3	49 ff		eor #$ff	        eor     #$FF
+.fcc5	60		rts		        rts
+.fcc6	48		pha		KEY2XR: pha                     ; KEY2XR - read-X-from keyboard invert for C1
+.fcc7	20 cf fc	jsr $fccf	        jsr     KYREAD
+.fcca	aa		tax		        tax
+.fccb	68		pla		        pla
+.fccc	ca		dex		        dex
+.fccd	e8		inx		        inx
+.fcce	60		rts		        rts
+.fccf	ad 00 df	lda $df00	KYREAD: lda     $DF00           ; $FCCF - KYREAD - read-A-from-keyboard invert for C1
+.fcd2	49 ff		eor #$ff	        eor     #$FF
+.fcd4	60		rts		        rts
+.fcd5	c9 5f		cmp #$5f	        cmp     #$5F
+.fcd7	f0 03		beq $fcdc	        beq     LFCDC
+.fcd9	4c 74 a3	jmp $a374	        jmp     LA374
+.fcdc	4c 4b a3	jmp $a34b	LFCDC:  jmp     LA34B
+.fcdf	a0 10		ldy #$10	KDELAY: ldy     #$10            ; $FCDF - KDELAY approx. 6500 cycle delayl exits with X and Y registers zero
+.fce1	a2 40		ldx #$40	DELAY2: ldx     #$40            ; $FCE1 - DELAY2 approx 400xY register cycles delay
+.fce3	ca		dex		LFCE3:  dex
+.fce4	d0 fd		bne $fce3	        bne     LFCE3
+.fce6	88		dey		        dey
+.fce7	d0 f8		bne $fce1	        bne     DELAY2
+.fce9	60		rts		        rts
+>fcea	43 45 47 4d 4f 4e 28 43		LFCEA:  .text	"CEGMON(C)1980 D/C/W/M?"
+>fcf2	29 31 39 38 30 20 44 2f 43 2f 57 2f 4d 3f
+.fd00	8a		txa		GETKEY: txa                     ; $FD00 - GETKEY wait till key pressed, return with ASCII value in A register
+.fd01	48		pha		        pha
+.fd02	98		tya		        tya
+.fd03	48		pha		        pha
+.fd04	a9 80		lda #$80	LFD04:  lda     #$80
+.fd06	20 be fc	jsr $fcbe	LFD06:  jsr     KEYWRT
+.fd09	20 c6 fc	jsr $fcc6	        jsr     KEY2XR
+.fd0c	d0 05		bne $fd13	        bne     LFD13
+.fd0e	4a		lsr a		        lsr     a
+.fd0f	d0 f5		bne $fd06	        bne     LFD06
+.fd11	f0 27		beq $fd3a	        beq     LFD3A
+.fd13	4a		lsr a		LFD13:  lsr     a
+.fd14	90 09		bcc $fd1f	        bcc     LFD1F
+.fd16	8a		txa		        txa
+.fd17	29 20		and #$20	        and     #$20
+.fd19	f0 1f		beq $fd3a	        beq     LFD3A
+.fd1b	a9 1b		lda #$1b	        lda     #$1B
+.fd1d	d0 31		bne $fd50	        bne     LFD50
+.fd1f	20 86 fe	jsr $fe86	LFD1F:  jsr     LFE86
+.fd22	98		tya		        tya
+.fd23	8d 15 02	sta $0215	        sta     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fd26	0a		asl a		        asl     a
+.fd27	0a		asl a		        asl     a
+.fd28	0a		asl a		        asl     a
+.fd29	38		sec		        sec
+.fd2a	ed 15 02	sbc $0215	        sbc     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fd2d	8d 15 02	sta $0215	        sta     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fd30	8a		txa		        txa
+.fd31	4a		lsr a		        lsr     a
+.fd32	0a		asl a		        asl     a
+.fd33	20 86 fe	jsr $fe86	        jsr     LFE86
+.fd36	f0 0f		beq $fd47	        beq     LFD47
+.fd38	a9 00		lda #$00	        lda     #$00
+.fd3a	8d 16 02	sta $0216	LFD3A:  sta     $0216           ; $0216 LSTCHR pre-shift value of last key left here by GETKEY to test auto-repeat
+.fd3d	8d 13 02	sta $0213	LFD3D:  sta     $0213
+.fd40	a9 02		lda #$02	        lda     #$02
+.fd42	8d 14 02	sta $0214	        sta     $0214           ; $0214 COUNTR auto-repeat counter for GETKEY
+.fd45	d0 bd		bne $fd04	        bne     LFD04
+.fd47	18		clc		LFD47:  clc
+.fd48	98		tya		        tya
+.fd49	6d 15 02	adc $0215	        adc     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fd4c	a8		tay		        tay
+.fd4d	b9 3b ff	lda $ff3b,y	        lda     LFF3B,y
+.fd50	cd 13 02	cmp $0213	LFD50:  cmp     $0213
+.fd53	d0 e8		bne $fd3d	        bne     LFD3D
+.fd55	ce 14 02	dec $0214	        dec     $0214           ; $0214 COUNTR auto-repeat counter for GETKEY
+.fd58	f0 05		beq $fd5f	        beq     LFD5F
+.fd5a	20 df fc	jsr $fcdf	        jsr     KDELAY
+.fd5d	f0 a5		beq $fd04	        beq     LFD04
+.fd5f	a2 64		ldx #$64	LFD5F:  ldx     #$64
+.fd61	cd 16 02	cmp $0216	        cmp     $0216           ; $0216 LSTCHR pre-shift value of last key left here by GETKEY to test auto-repeat
+.fd64	d0 02		bne $fd68	        bne     LFD68
+.fd66	a2 0f		ldx #$0f	        ldx     #$0F
+.fd68	8e 14 02	stx $0214	LFD68:  stx     $0214           ; $0214 COUNTR auto-repeat counter for GETKEY
+.fd6b	8d 16 02	sta $0216	        sta     $0216           ; $0216 LSTCHR pre-shift value of last key left here by GETKEY to test auto-repeat
+.fd6e	c9 21		cmp #$21	        cmp     #$21
+.fd70	30 5e		bmi $fdd0	        bmi     LFDD0
+.fd72	c9 5f		cmp #$5f	        cmp     #$5F
+.fd74	f0 5a		beq $fdd0	        beq     LFDD0
+.fd76	a9 01		lda #$01	        lda     #$01
+.fd78	20 be fc	jsr $fcbe	        jsr     KEYWRT
+.fd7b	20 cf fc	jsr $fccf	        jsr     KYREAD
+.fd7e	8d 15 02	sta $0215	        sta     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fd81	29 01		and #$01	        and     #$01
+.fd83	aa		tax		        tax
+.fd84	ad 15 02	lda $0215	        lda     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fd87	29 06		and #$06	        and     #$06
+.fd89	d0 17		bne $fda2	        bne     LFDA2
+.fd8b	2c 13 02	bit $0213	        bit     $0213
+.fd8e	50 2b		bvc $fdbb	        bvc     LFDBB
+.fd90	8a		txa		        txa
+.fd91	49 01		eor #$01	        eor     #$01
+.fd93	29 01		and #$01	        and     #$01
+.fd95	f0 24		beq $fdbb	        beq     LFDBB
+.fd97	a9 20		lda #$20	        lda     #$20
+.fd99	2c 15 02	bit $0215	        bit     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fd9c	50 25		bvc $fdc3	        bvc     LFDC3
+.fd9e	a9 c0		lda #$c0	        lda     #$C0
+.fda0	d0 21		bne $fdc3	        bne     LFDC3
+.fda2	2c 13 02	bit $0213	LFDA2:  bit     $0213
+.fda5	50 03		bvc $fdaa	        bvc     LFDAA
+.fda7	8a		txa		        txa
+.fda8	f0 11		beq $fdbb	        beq     LFDBB
+.fdaa	ac 13 02	ldy $0213	LFDAA:  ldy     $0213
+.fdad	c0 31		cpy #$31	        cpy     #$31
+.fdaf	90 08		bcc $fdb9	        bcc     LFDB9
+.fdb1	c0 3c		cpy #$3c	        cpy     #$3C
+.fdb3	b0 04		bcs $fdb9	        bcs     LFDB9
+.fdb5	a9 f0		lda #$f0	        lda     #$F0
+.fdb7	d0 02		bne $fdbb	        bne     LFDBB
+.fdb9	a9 10		lda #$10	LFDB9:  lda     #$10
+.fdbb	2c 15 02	bit $0215	LFDBB:  bit     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fdbe	50 03		bvc $fdc3	        bvc     LFDC3
+.fdc0	18		clc		        clc
+.fdc1	69 c0		adc #$c0	        adc     #$C0
+.fdc3	18		clc		LFDC3:  clc
+.fdc4	6d 13 02	adc $0213	        adc     $0213
+.fdc7	29 7f		and #$7f	        and     #$7F
+.fdc9	2c 15 02	bit $0215	        bit     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fdcc	10 02		bpl $fdd0	        bpl     LFDD0
+.fdce	09 80		ora #$80	        ora     #$80
+.fdd0	8d 15 02	sta $0215	LFDD0:  sta     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fdd3	68		pla		LFDD3:  pla
+.fdd4	a8		tay		        tay
+.fdd5	68		pla		        pla
+.fdd6	aa		tax		        tax
+.fdd7	ad 15 02	lda $0215	        lda     $0215           ; $0215 SCRTCH returns from GETKEY with final ASCII value of key
+.fdda	60		rts		        rts
+.fddb	20 f9 fe	jsr $fef9	LFDDB:  jsr     BUMP
+.fdde	e6 e4		inc $e4		        inc     $E4             ; Break table K register - stack pointer
+.fde0	d0 02		bne $fde4	        bne     LFDE4
+.fde2	e6 e5		inc $e5		        inc     $E5             ; Break table PCL - low byte of program counter
+.fde4	b1 fe		lda ($fe),y	LFDE4:  lda     (L00FE),y       ; $FDE4 SWAP memory block move. Expects start address in (FE), end address in (F9), new start of block in (E4) assumes Y=0
+.fde6	91 e4		sta ($e4),y	        sta     ($E4),y         ; Break table K register - stack pointer
+.fde8	20 eb fb	jsr $fbeb	        jsr     NOTEND
+.fdeb	90 ee		bcc $fddb	        bcc     LFDDB
+.fded	60		rts		        rts
+.fdee	18		clc		LFDEE:  clc
+.fdef	a9 40		lda #$40	        lda     #$40
+.fdf1	7d 28 02	adc $0228,x	        adc     $0228,x
+.fdf4	9d 28 02	sta $0228,x	        sta     $0228,x
+.fdf7	a9 00		lda #$00	        lda     #$00
+.fdf9	7d 29 02	adc $0229,x	        adc     $0229,x
+.fdfc	9d 29 02	sta $0229,x	        sta     $0229,x
+.fdff	60		rts		        rts
+.fe00	a2 28		ldx #$28	NEWMON: ldx     #$28            ; $FE00 NEWMON entry to m/c monitor - reset stack, vectors/pointers, clear decimal mode. Recommended re-entry point for auto-load m/c tapes.
+.fe02	9a		txs		        txs
+.fe03	d8		cld		        cld
+.fe04	20 a6 fc	jsr $fca6	        jsr     RSACIA
+.fe07	20 40 fe	jsr $fe40	        jsr     LFE40
+.fe0a	ea		nop		        nop
+.fe0b	ea		nop		        nop
+.fe0c	20 59 fe	jsr $fe59	MENTRY: jsr     SCNCLR          ; $FE0C MENTRY non-reset entry to m/c monitor - clear screen, zero 'current address'
+.fe0f	8d 01 02	sta $0201	        sta     $0201           ; $0201 OLDCHR stores current character during SCREEN; exits containing char beneath the cursor
+.fe12	84 fe		sty $fe		        sty     L00FE           ; $00FE LOFROM store current address for most routines the from address in save move
+.fe14	84 ff		sty $ff		        sty     $FF
+.fe16	4c 7e f9	jmp $f97e	        jmp     MSTART
+.fe19	ae 2f 02	ldx $022f	LFE19:  ldx     $022F           ; $022F DISP edit-cursor displacement from start of editors current line
+.fe1c	f0 04		beq $fe22	        beq     LFE22
+.fe1e	ce 2f 02	dec $022f	        dec     $022F           ; $022F DISP edit-cursor displacement from start of editors current line
+.fe21	60		rts		        rts
+.fe22	ae 22 02	ldx $0222	LFE22:  ldx     $0222
+.fe25	8e 2f 02	stx $022f	        stx     $022F           ; $022F DISP edit-cursor displacement from start of editors current line
+.fe28	38		sec		LFE28:  sec
+.fe29	ad 31 02	lda $0231	        lda     $0231           ; $0231 CURSLO contain start of edit cursors current line on screen
+.fe2c	e9 40		sbc #$40	        sbc     #$40
+.fe2e	8d 31 02	sta $0231	        sta     $0231           ; $0231 CURSLO contain start of edit cursors current line on screen
+.fe31	ad 32 02	lda $0232	        lda     $0232           ; $0232 CURSHI contain start of edit cursors current line on screen
+.fe34	e9 00		sbc #$00	        sbc     #$00
+.fe36	c9 cf		cmp #$cf	        cmp     #$CF
+.fe38	d0 02		bne $fe3c	        bne     LFE3C
+.fe3a	a9 d7		lda #$d7	        lda     #$D7
+.fe3c	8d 32 02	sta $0232	LFE3C:  sta     $0232           ; $0232 CURSHI contain start of edit cursors current line on screen
+.fe3f	60		rts		        rts
+.fe40	a0 1c		ldy #$1c	LFE40:  ldy     #$1C
+.fe42	b9 b2 fb	lda $fbb2,y	LFE42:  lda     LFBB2,y
+.fe45	99 18 02	sta $0218,y	        sta     L0218,y
+.fe48	88		dey		        dey
+.fe49	10 f7		bpl $fe42	        bpl     LFE42
+.fe4b	a0 07		ldy #$07	        ldy     #$07
+.fe4d	a9 00		lda #$00	        lda     #$00
+.fe4f	8d 12 02	sta $0212	        sta     $0212           ; $0212 CCFLAG BASIC CTRL-C flag 00-enables CTRL-C break, 01-disables CTRL-C break
+.fe52	99 ff 01	sta $01ff,y	LFE52:  sta     $01FF,y
+.fe55	88		dey		        dey
+.fe56	d0 fa		bne $fe52	        bne     LFE52
+.fe58	60		rts		        rts
+.fe59	a0 00		ldy #$00	SCNCLR: ldy     #$00            ; SCNCLR $FE59 Clear entire screen; exits with X and Y registers zero.
+.fe5b	84 f9		sty $f9		        sty     $F9
+.fe5d	a9 d0		lda #$d0	        lda     #$D0
+.fe5f	85 fa		sta $fa		        sta     $FA
+.fe61	a2 08		ldx #$08	        ldx     #$08
+.fe63	a9 20		lda #$20	        lda     #$20
+.fe65	91 f9		sta ($f9),y	LFE65:  sta     ($F9),y
+.fe67	c8		iny		        iny
+.fe68	d0 fb		bne $fe65	        bne     LFE65
+.fe6a	e6 fa		inc $fa		        inc     $FA
+.fe6c	ca		dex		        dex
+.fe6d	d0 f6		bne $fe65	        bne     LFE65
+.fe6f	60		rts		        rts
+.fe70	48		pha		        pha
+.fe71	ce 03 02	dec $0203	        dec     $0203           ; $0203 LDFLAG BASIC load flag 00=no load, FF-load from ACIA
+.fe74	a9 00		lda #$00	        lda     #$00
+.fe76	8d 05 02	sta $0205	LFE76:  sta     $0205           ; $0205 SVFLAG BASIC save flag 0=skip save, 1=enable save to ACIA
+.fe79	68		pla		        pla
+.fe7a	60		rts		        rts
+.fe7b	48		pha		        pha
+.fe7c	a9 01		lda #$01	        lda     #$01
+.fe7e	d0 f6		bne $fe76	        bne     LFE76
+.fe80	20 57 fb	jsr $fb57	MCACIA: jsr     TAPIN           ; $FE80 MCACIA get char from ACIA, strip off top bit before returning
+.fe83	29 7f		and #$7f	        and     #$7F
+.fe85	60		rts		        rts
+.fe86	a0 08		ldy #$08	LFE86:  ldy     #$08
+.fe88	88		dey		LFE88:  dey
+.fe89	0a		asl a		        asl     a
+.fe8a	90 fc		bcc $fe88	        bcc     LFE88
+.fe8c	60		rts		        rts
+.fe8d	20 e9 fe	jsr $fee9	GETNEW: jsr     GETCHR          ; $FE8D GETNEW get new char; print it to display before returning
+.fe90	4c ee ff	jmp $ffee	        jmp     OUTVEC
+.fe93	c9 30		cmp #$30	ASCHEX: cmp     #$30            ; $FE93 - ASCHEX strip ASCII digit to hex set to 80(base16) if not hex
+.fe95	30 12		bmi $fea9	        bmi     LFEA9
+.fe97	c9 3a		cmp #$3a	        cmp     #$3A
+.fe99	30 0b		bmi $fea6	        bmi     LFEA6
+.fe9b	c9 41		cmp #$41	        cmp     #$41
+.fe9d	30 0a		bmi $fea9	        bmi     LFEA9
+.fe9f	c9 47		cmp #$47	        cmp     #$47
+.fea1	10 06		bpl $fea9	        bpl     LFEA9
+.fea3	38		sec		        sec
+.fea4	e9 07		sbc #$07	        sbc     #$07
+.fea6	29 0f		and #$0f	LFEA6:  and     #$0F
+.fea8	60		rts		        rts
+.fea9	a9 80		lda #$80	LFEA9:  lda     #$80
+.feab	60		rts		        rts
+.feac	20 b6 fe	jsr $feb6	ADVTOD: jsr     QDDATD          ; $FEAC ADVTOD print address in (FE), space, value in FC to display
+.feaf	ea		nop		        nop
+.feb0	ea		nop		        nop
+.feb1	20 e6 fb	jsr $fbe6	        jsr     SPCOUT
+.feb4	d0 07		bne $febd	        bne     PRDATD
+.feb6	a2 03		ldx #$03	QDDATD: ldx     #$03            ; $FEB6 QDDATD print address in (FE) to display
+.feb8	20 bf fe	jsr $febf	        jsr     LFEBF
+.febb	ca		dex		        dex
+>febc	2c				        .byte   $2C
+.febd	a2 00		ldx #$00	PRDATD: ldx     #$00            ; $FEBD PRDATD print data byte in FC to display
+.febf	b5 fc		lda $fc,x	LFEBF:  lda     $FC,x
+.fec1	4a		lsr a		        lsr     a
+.fec2	4a		lsr a		        lsr     a
+.fec3	4a		lsr a		        lsr     a
+.fec4	4a		lsr a		        lsr     a
+.fec5	20 ca fe	jsr $feca	        jsr     HEXOUT
+.fec8	b5 fc		lda $fc,x	        lda     $FC,x
+.feca	29 0f		and #$0f	HEXOUT: and     #$0F            ; $FECA HEXOUT strip bute in A register to lower nibble; print nibble as ASCII hex to display
+.fecc	09 30		ora #$30	        ora     #$30
+.fece	c9 3a		cmp #$3a	        cmp     #$3A
+.fed0	30 03		bmi $fed5	        bmi     LFED5
+.fed2	18		clc		        clc
+.fed3	69 07		adc #$07	        adc     #$07
+.fed5	4c ee ff	jmp $ffee	LFED5:  jmp     OUTVEC
+.fed8	ea		nop		        nop
+.fed9	ea		nop		        nop
+.feda	a0 04		ldy #$04	ROLSTR: ldy     #$04            ; $FEDA ROLSRT roll new nibble into (FE) if X=2, or into FC if X=0
+.fedc	0a		asl a		        asl     a
+.fedd	0a		asl a		        asl     a
+.fede	0a		asl a		        asl     a
+.fedf	0a		asl a		        asl     a
+.fee0	2a		rol a		LFEE0:  rol     a
+.fee1	36 f9		rol $f9,x	        rol     $F9,x
+.fee3	36 fa		rol $fa,x	        rol     $FA,x
+.fee5	88		dey		        dey
+.fee6	d0 f8		bne $fee0	        bne     LFEE0
+.fee8	60		rts		        rts
+.fee9	a5 fb		lda $fb		GETCHR:  lda     $FB            ; $FEE9 - GETCHR get char from keyboard or ACIA
+.feeb	d0 93		bne $fe80	        bne     MCACIA
+.feed	4c 00 fd	jmp $fd00	        jmp     GETKEY
+.fef0	b1 fe		lda ($fe),y	PRBYTE: lda     (L00FE),y       ; $FEF0 PRBYTE print data at current address pointed to by (FE) to display. Assumes Y=0!
+.fef2	85 fc		sta $fc		        sta     $FC
+.fef4	4c bd fe	jmp $febd	        jmp     PRDATD
+.fef7	91 fe		sta ($fe),y	LFEF7:  sta     (L00FE),y       ; $00FE LOFROM store current address for most routines the from address in save move
+.fef9	e6 fe		inc $fe		BUMP:   inc     L00FE           ; $FEF9 BUMP increment current address at (FE)
+.fefb	d0 02		bne $feff	        bne     LFEFF
+.fefd	e6 ff		inc $ff		        inc     $FF
+.feff	60		rts		LFEFF:  rts
+.ff00	d8		cld		RESET:  cld                     ; $FF00 RESET start of BREAK/RESET routine.
+.ff01	a2 28		ldx #$28	        ldx     #$28
+.ff03	9a		txs		        txs
+.ff04	20 a6 fc	jsr $fca6	        jsr     RSACIA
+.ff07	20 40 fe	jsr $fe40	        jsr     LFE40
+.ff0a	20 59 fe	jsr $fe59	        jsr     SCNCLR
+.ff0d	20 d1 ff	jsr $ffd1	        jsr     CURHOM
+.ff10	b9 ea fc	lda $fcea,y	LFF10:  lda     LFCEA,y
+.ff13	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.ff16	c8		iny		        iny
+.ff17	c0 16		cpy #$16	        cpy     #$16
+.ff19	d0 f5		bne $ff10	        bne     LFF10
+.ff1b	20 eb ff	jsr $ffeb	        jsr     INVEC           ; Input vector
+.ff1e	29 df		and #$df	        and     #$DF
+.ff20	c9 44		cmp #$44	        cmp     #'D'
+.ff22	d0 03		bne $ff27	        bne     LFF27
+.ff24	4c 00 fc	jmp $fc00	        jmp     DISK
+.ff27	c9 4d		cmp #$4d	LFF27:  cmp     #$4D
+.ff29	d0 03		bne $ff2e	        bne     LFF2E
+.ff2b	4c 00 fe	jmp $fe00	        jmp     NEWMON
+.ff2e	c9 57		cmp #$57	LFF2E:  cmp     #$57
+.ff30	d0 03		bne $ff35	        bne     LFF35
+.ff32	4c 00 00	jmp $0000	        jmp     L0000
+.ff35	c9 43		cmp #$43	LFF35:  cmp     #$43
+.ff37	d0 c7		bne $ff00	        bne     RESET
+>ff39	4c				        .byte   $4C
+>ff3a	11				        .byte   $11
+>ff3b	bd				LFF3B:  .byte   $BD
+>ff3c	50 3b 2f 20 5a 41 51 2c		        .text   "P;/ ZAQ,MNBVCXKJHGFDSIUYTREW"
+>ff44	4d 4e 42 56 43 58 4b 4a 48 47 46 44 53 49 55 59
+>ff54	54 52 45 57
+>ff58	00 00 0d 0a 4f			        .byte $00, $00, $0D, $0A, 'O'
+.ff5d	4c 2e 00	jmp $002e	        jmp     L002E
+>ff60	5f 2d 3a 30 39 38 37 36		        .text   "_-:0987654321"
+>ff68	35 34 33 32 31
+.ff6d	20 8c ff	jsr $ff8c	LFF6D:  jsr     SCOUT
+.ff70	a2 00		ldx #$00	LFF70:  ldx     #$00
+.ff72	8e 00 02	stx $0200	        stx     $0200           ; $0200 CURDIS cursor displacement on current line
+.ff75	ae 00 02	ldx $0200	LFF75:  ldx     $0200           ; $0200 CURDIS cursor displacement on current line
+.ff78	a9 bd		lda #$bd	        lda     #$BD
+.ff7a	8d 2a 02	sta $022a	        sta     L022A
+.ff7d	20 2a 02	jsr $022a	        jsr     L022A
+.ff80	8d 01 02	sta $0201	        sta     $0201           ; $0201 OLDCHR stores current character during SCREEN; exits containing char beneath the cursor
+.ff83	a9 9d		lda #$9d	        lda     #$9D
+.ff85	8d 2a 02	sta $022a	        sta     L022A
+.ff88	a9 5f		lda #$5f	LFF88:  lda     #$5F
+.ff8a	d0 03		bne $ff8f	        bne     LFF8F
+.ff8c	ad 01 02	lda $0201	SCOUT:  lda     $0201           ; SCOUT - print chr at cursor location
+.ff8f	ae 00 02	ldx $0200	LFF8F:  ldx     $0200           ; $0200 CURDIS cursor displacement on current line
+.ff92	4c 2a 02	jmp $022a	        jmp     L022A
+.ff95	20 2d bf	jsr $bf2d	        jsr     LBF2D
+.ff98	4c 9e ff	jmp $ff9e	        jmp     LFF9E
+.ff9b	20 36 f8	jsr $f836	        jsr     SCREEN          ; $F836 is SCREEN - new screen handler
+.ff9e	48		pha		LFF9E:  pha
+.ff9f	ad 05 02	lda $0205	        lda     $0205           ; $0205 SVFLAG BASIC save flag 0=skip save, 1=enable save to ACIA
+.ffa2	f0 17		beq $ffbb	        beq     LFFBB
+.ffa4	68		pla		        pla
+.ffa5	20 b1 fc	jsr $fcb1	        jsr     TAPOUT
+.ffa8	c9 0d		cmp #$0d	        cmp     #$0D
+.ffaa	d0 10		bne $ffbc	        bne     LFFBC
+.ffac	48		pha		LFFAC:  pha
+.ffad	8a		txa		        txa
+.ffae	48		pha		        pha
+.ffaf	a2 0a		ldx #$0a	        ldx     #$0A
+.ffb1	a9 00		lda #$00	        lda     #$00
+.ffb3	20 b1 fc	jsr $fcb1	LFFB3:  jsr     TAPOUT
+.ffb6	ca		dex		        dex
+.ffb7	d0 fa		bne $ffb3	        bne     LFFB3
+.ffb9	68		pla		        pla
+.ffba	aa		tax		        tax
+.ffbb	68		pla		LFFBB:  pla
+.ffbc	60		rts		LFFBC:  rts
+.ffbd	20 a6 f9	jsr $f9a6	TRIQAD: jsr     TWOQAD          ; $FFBD - TRIQAD - Collect three address, first stored in (FE) pair, second in (F9), and third in (E4)
+.ffc0	20 e0 fb	jsr $fbe0	        jsr     LFBE0
+.ffc3	a2 03		ldx #$03	        ldx     #$03
+.ffc5	20 b1 f9	jsr $f9b1	        jsr     LF9B1
+.ffc8	a5 fc		lda $fc		        lda     $FC
+.ffca	a6 fd		ldx $fd		        ldx     L00FD
+.ffcc	85 e4		sta $e4		        sta     $E4             ; Break table K register - stack pointer
+.ffce	86 e5		stx $e5		        stx     $E5             ; Break table PCL - low byte of program counter
+.ffd0	60		rts		        rts
+.ffd1	a2 02		ldx #$02	CURHOM: ldx     #$02            ; CURHOM - resets TEXT line pointer to TOP - do STX $0200 to reset cursor at top
+.ffd3	bd 22 02	lda $0222,x	LFFD3:  lda     $0222,x
+.ffd6	9d 27 02	sta $0227,x	        sta     L0227,x
+.ffd9	9d 2a 02	sta $022a,x	        sta     L022A,x
+.ffdc	ca		dex		        dex
+.ffdd	d0 f4		bne $ffd3	        bne     LFFD3
+.ffdf	60		rts		        rts
+.ffe0	4d 2f 01	eor $012f	        eor     $012F           ; This looks like a wrong disassembly
+.ffe3	a9 2e		lda #$2e	LFFE3:  lda     #$2E
+.ffe5	20 ee ff	jsr $ffee	        jsr     OUTVEC
+.ffe8	4c b6 fe	jmp $feb6	        jmp     QDDATD
+.ffeb	4c 46 fb	jmp $fb46	INVEC:  jmp     $fb46           ; $FFEB = INVEC - normally points to INPUT $FB46
+.ffee	4c 9b ff	jmp $ff9b	OUTVEC: jmp     $ff9b           ; $FFEE = OUTVEC - normally points to OUTPUT $FF9B
+.fff1	6c 1c 02	jmp ($021c)	CCVEC:  jmp     (L021C)         ; $FFF1 = CCVEC - normally points to CTRLC $FB94
+.fff4	6c 1e 02	jmp ($021e)	LDVEC:  jmp     (L021E)         ; $FFF4 = LDVEC - normally points to SETLOD $FE70
+.fff7	6c 20 02	jmp ($0220)	SVVEC:  jmp     (L0220)         ; $FFF7 = SVVEC - normally points to SETSAV $FE7B
+>fffa	37 02				        .word   $0237           ; NMI vector
+>fffc	00 fe				        .word   NEWMON          ; Reset vector
+>fffe	35 02				        .word   $0235           ; BRK/IRQ vector
+
+;******  End of listing
