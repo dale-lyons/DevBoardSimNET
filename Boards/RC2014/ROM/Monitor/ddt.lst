@@ -1,0 +1,81 @@
+              	; --------------------------------------
+              	; zasm: assemble "ddt.asm"
+              	; date: 2023-11-04 15:18:41
+              	; --------------------------------------
+
+
+0000:         	RAM_VECTORS	equ	0
+8000:         	ramStart	equ	08000h
+0000:         		org		0
+0000: F3      		di				; disable interrupts
+              		jmp	ddtStart
+***ERROR***   		   ^ no Z80 assembler opcode (use option --asm8080)
+              	
+              		#INCLUDE "boot.asm"
+***ERROR***   		 ^ instruction expected
+              		INCL	"main.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"uart.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"vector.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"strings.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"dump.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"move.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"compare.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"search.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"fill.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"unassemble.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"OpCode.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"registers.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"load.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"Trace.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"io.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"enter.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"go.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"cpm.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL 	"help.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL	"instruction.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL	"RpTest_8085.asm"
+***ERROR***   		    ^ unknown instruction
+              		INCL	"RpTest_Z80.asm"
+***ERROR***   		    ^ unknown instruction
+0001: 44445420	initmsg:	db	'DDT (Dales debug Tool) for RC2014 (Z80) v1.0', 0
+0005: 2844616C	
+0009: 65732064	
+000D: 65627567	
+0011: 20546F6F	
+0015: 6C292066	
+0019: 6F722052	
+001D: 43323031	
+0021: 3420285A	
+0025: 38302920	
+0029: 76312E30	
+002D: 00      	
+              	
+002E: FFFFFFFF		org		ramStart
+0032: FF...   	
+              		INCL "ram.asm"
+***ERROR***   		    ^ unknown instruction
+              		end
+
+
+total time: 0.0013 sec.
+25 errors
