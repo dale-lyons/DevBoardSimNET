@@ -1,0 +1,63 @@
+grammar Arithmetic;
+
+@header
+{
+#pragma warning disable 3021
+}
+@parser::members
+{
+    protected const int EOF = Eof;
+}
+@lexer::members
+{
+    protected const int EOF = Eof;
+    protected const int HIDDEN = Hidden;
+}
+options
+{
+	language = CSharp;
+}
+
+prog
+  : expression+
+  ;
+
+expression 
+     : expression op=('*'|'/') expression  # MulDiv
+     | expression op=('+'|'-') expression  # AddSub
+     | INT                 # int
+     | '(' expression ')'  # parens
+     ;
+ 
+ variable
+   : VARIABLE
+   ;
+
+VARIABLE
+   : VALID_ID_START VALID_ID_CHAR*
+   ;
+
+fragment VALID_ID_START
+   : ('a' .. 'z') | ('A' .. 'Z') | '_'
+   ;
+
+fragment VALID_ID_CHAR
+   : VALID_ID_START | ('0' .. '9')
+   ;
+
+/*
+ * Lexer Rules
+ */
+INT : [0-9]+;
+MUL : '*';
+DIV : '/';
+ADD : '+';
+SUB : '-';
+
+WS
+    :   (' ' | '\r' | '\n') -> channel(HIDDEN)
+    ;
+
+/*WS
+   : [ \r\n\t] + -> skip
+   ;*/
