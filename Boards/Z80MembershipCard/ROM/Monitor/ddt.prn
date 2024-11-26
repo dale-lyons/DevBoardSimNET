@@ -1,0 +1,9 @@
+     1                   CR              equ     0dh
+     1                   LF              equ     0ah
+     1                   SPACE           equ     020h
+     1                   BACKSPACE       equ     08h
+     1                   TAB             equ     09h
+     1                   retOpcode       equ     0c9h
+     1                   ramStartequ     08000h
+     1                           org     0
+     1   0000:F3                 di                      ; disable interrupts

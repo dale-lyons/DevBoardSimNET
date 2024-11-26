@@ -1,0 +1,591 @@
+     1                   CR              equ     0dh
+     1                   LF              equ     0ah
+     1                   SPACE           equ     020h
+     1                   BACKSPACE       equ     08h
+     1                   TAB             equ     09h
+     1                   ;retOpcode      equ     0c9h
+     1                   ;ramStart       equ     08000h
+     1                           org     08000h
+     1   8000:31B185             lxi     sp,stack
+     1   8003:CD4280             call    UartInit
+     1   8006:213280             lxi     h,mns01
+     1   8009:CDE281             call    printf
+     1   800C:2AAD83             lhld    bittim
+     1   800F:CD3082             call    dhexOut
+     1   8012:CD2382             call    crlf
+     1   8015:213A80             lxi     h,mns02
+     1   8018:CDE281             call    printf
+     1   801B:2AAF83             lhld    halfbt
+     1   801E:CD3082             call    dhexOut
+     1   8021:CD2382             call    crlf
+     1   8024:3E2D               mvi     a,'-'
+     1   8026:CD5380             call    UartWrite
+     1                   @@:
+     1   8029:CD4A80             call    UartRead
+     1   802C:CD5380             call    UartWrite
+     1   802F:C32980             jmp     @B
+     1   8032:6269747469 mns01:  db      'bittim:', 0
+     1   803A:68616C6662 mns02:  db      'halfbt:', 0
+     1                   ;       include main.asm
+     1                   serial_port     equ     40h
+     1                   data_bitequ     80h
+     1                   UartInit:
+     1   8042:3E80               mvi     a,80h
+     1   8044:D340               out     serial_port     ; set serial line high
+     1   8046:CD5C80             call    brid
+     1   8049:C9                 ret
+     1                   UartRead:
+     1   804A:C5                 push    b
+     1   804B:E5                 push    h
+     1   804C:CDB880             call    cin
+     1   804F:79                 mov     a,c
+     1   8050:E1                 pop     h
+     1   8051:C1                 pop     b
+     1   8052:C9                 ret
+     1                   UartWrite:
+     1   8053:C5                 push    b
+     1   8054:E5                 push    h
+     1   8055:4F                 mov     c,a
+     1   8056:CD9080             call    cout
+     1   8059:E1                 pop     h
+     1   805A:C1                 pop     b
+     1   805B:C9                 ret
+     1                   ;
+     1                   ;  BRID - Determine the baud rate of the terminal. This routine
+     1                   ; actually finds the proper divisors BITTIM and HALFBT to run CIN
+     1                   ; and COUT properly.
+     1                   ;
+     1                   ;   The routine expects a space. It looks at the 6 zeroes in the
+     1                   ; 20h stream from the serial port and counts time from the start
+     1                   ; bit to the first 1.
+     1                   ;
+     1                   ;  serial_port is the port address of the input data. data_bit
+     1                   ; is the bit mask.
+     1                   ;
+     1                   brid:
+     1   805C:DB40               in      serial_port
+     1   805E:E680               ani     data_bit
+     1   8060:CA5C80             jz      brid            ; loop till serial not busy
+     1                   bri1:
+     1   8063:DB40               in      serial_port
+     1   8065:E680               ani     data_bit
+     1   8067:C26380             jnz     bri1            ; loop till start bit comes
+     1   806A:21F9FF             lxi     h,-7            ; bit count
+     1                   bri3:
+     1   806D:1E03               mvi     e,3
+     1                   bri4:   
+     1   806F:1D                 dcr     e               ; 42 machine cycle loop
+     1   8070:C26F80             jnz     bri4
+     1   8073:00                 nop                     ; balance cycle counts
+     1   8074:23                 inx     h               ; inc counter every 98 cycles
+     1                                                   ; while serial line is low
+     1   8075:DB40               in      serial_port
+     1   8077:E680               ani     data_bit
+     1   8079:CA6D80             jz      bri3            ; loop while serial line low
+     1   807C:E5                 push    h               ; save count for halfbt computation
+     1   807D:24                 inr     h
+     1   807E:2C                 inr     l               ; add 101h w/o doing internal carry
+     1   807F:22AD83             shld    bittim          ; save bit time
+     1   8082:E1                 pop     h               ; restore count
+     1   8083:AF                 xra     a               ; clear carry
+     1   8084:7C                 mov     a,h             ; compute hl/2
+     1   8085:1F                 rar
+     1   8086:67                 mov     h,a
+     1   8087:7D                 mov     a,l
+     1   8088:1F                 rar
+     1   8089:6F                 mov     l,a             ; hl=count/2
+     1   808A:24                 inr     h
+     1   808B:2C                 inr     l               ; add 101h w/o doing internal carry
+     1   808C:22AF83             shld    halfbt
+     1   808F:C9                 ret
+     1                   ;
+     1                   ; Output the character in C
+     1                   ;
+     1                   ;  Bittime has the delay time per bit, and is computed as:
+     1                   ;
+     1                   ;  <HL>' = ((freq in Hz/baudrate) - 98 )/14
+     1                   ;  BITTIM = <HL>'+101H  (with no internal carry prop between bytes)
+     1                   ;
+     1                   ; and OUT to serial_high sets the serial line high; an OUT
+     1                   ; to serial_low sets it low, regardless of the contents set to the
+     1                   ; port.
+     1                   ;
+     1                   cout:
+     1   8090:060B               mvi     b,11            ; # bits to send (start, 8 data, 2 stop)
+     1   8092:AF                 xra     a               ; clear carry for start bit
+     1                   co1:
+     1   8093:D29D80             jnc     cc1             ; if carry, will set line high
+     1   8096:3E80               mvi     a,data_bit
+     1   8098:D340               out     serial_port     ; set serial line high
+     1   809A:C3A480             jmp     cc2
+     1                   cc1:
+     1   809D:3E00               mvi     a,0
+     1   809F:D340               out     serial_port     ; set serial line low
+     1   80A1:C3A480             jmp     cc2             ; idle; balance # cycles with those from setting output high
+     1                   cc2:
+     1   80A4:2AAD83             lhld    bittim          ; time per bit
+     1                   co2:
+     1   80A7:2D                 dcr     l
+     1   80A8:C2A780             jnz     co2             ; idle for one bit time
+     1   80AB:25                 dcr     h
+     1   80AC:C2A780             jnz     co2             ; idle for one bit time
+     1   80AF:37                 stc                     ; set carry high for next bit
+     1   80B0:79                 mov     a,c             ; a=character
+     1   80B1:1F                 rar                     ; shift it into the carry
+     1   80B2:4F                 mov     c,a
+     1   80B3:05                 dcr     b               ; --bit count
+     1   80B4:C29380             jnz     co1             ; send entire character
+     1   80B7:C9                 ret
+     1                   ;
+     1                   ;  CIN - input a character to C.
+     1                   ;
+     1                   ;  HALFBT is the time for a half bit transition on the serial input
+     1                   ; line. It is calculated as follows:
+     1                   ;   (BITTIM-101h)/2 +101h
+     1                   ;
+     1                   cin:
+     1   80B8:0609               mvi     b,9             ; bit count (start + 8 data)
+     1   80BA:0E00               mvi     c,0
+     1                   ci1:
+     1   80BC:DB40               in      serial_port     ; read serial line
+     1   80BE:E680               ani     data_bit; isolate serial bit
+     1   80C0:C2BC80             jnz     ci1             ; wait till serial data comes
+     1   80C3:2AAF83             lhld    halfbt          ; get 1/2 bit time
+     1                   ci2:
+     1   80C6:2D                 dcr     l
+     1   80C7:C2C680             jnz     ci2             ; wait till middle of start bit
+     1   80CA:25                 dcr     h
+     1   80CB:C2C680             jnz     ci2
+     1                   ci3:
+     1   80CE:2AAD83             lhld    bittim          ; bit time
+     1                   ci4:
+     1   80D1:2D                 dcr     l
+     1   80D2:C2D180             jnz     ci4             ; now wait one entire bit time
+     1   80D5:25                 dcr     h
+     1   80D6:C2D180             jnz     ci4
+     1   80D9:DB40               in      serial_port     ; read serial character
+     1   80DB:E680               ani     data_bit; isolate serial data
+     1   80DD:CAE180             jz      ci6             ; j if data is 0
+     1   80E0:3C                 inr     a               ; now register A=serial data
+     1                   ci6:
+     1   80E1:1F                 rar                     ; rotate it into carry
+     1   80E2:05                 dcr     b               ; dec bit count
+     1   80E3:CAED80             jz      ci5             ; j if last bit
+     1   80E6:79                 mov     a,c             ; this is where we assemble char
+     1   80E7:1F                 rar                     ; rotate it into the character from carry
+     1   80E8:4F                 mov     c,a
+     1   80E9:00                 nop                     ; delay so timing matches that in output routine
+     1   80EA:C3CE80             jmp     ci3             ; do next bit
+     1                   ci5:
+     1   80ED:C9                 ret
+     1                   ; returns length of null terminated string
+     1                   ; hl - ptr to string
+     1                   ; returns a: length of string
+     1                   strlen:
+     1   80EE:C5                 push    b
+     1   80EF:E5                 push    h
+     1   80F0:0600               mvi     b,0
+     1                   strlen05:
+     1   80F2:7E                 mov     a,m
+     1   80F3:FE00               cpi     0
+     1   80F5:CAFD80             jz      strlen99
+     1   80F8:23                 inx     h
+     1   80F9:04                 inr     b
+     1   80FA:C3F280             jmp     strlen05
+     1                   strlen99:
+     1   80FD:78                 mov     a,b
+     1   80FE:E1                 pop     h
+     1   80FF:C1                 pop     b
+     1   8100:C9                 ret
+     1                   ; remove leading and traing whitespace from string
+     1                   strtrim:
+     1   8101:C5                 push    b
+     1   8102:E5                 push    h
+     1   8103:F5                 push    psw
+     1                   strtrm05:
+     1   8104:7E                 mov     a,m
+     1   8105:B7                 ora     a
+     1   8106:CA1581             jz      strtrm10
+     1   8109:CD1582             call    IsWS
+     1   810C:C21581             jnz     strtrm10
+     1   810F:CD3381             call    strRemove
+     1   8112:C30481             jmp     strtrm05
+     1                   strtrm10:
+     1   8115:CDEE80             call    strlen
+     1   8118:B7                 ora     a
+     1   8119:CA2F81             jz      strtrm99
+     1   811C:E5                 push    h
+     1   811D:CD5F81             call    strend
+     1   8120:EB                 xchg
+     1   8121:E1                 pop     h
+     1   8122:1B                 dcx     d
+     1   8123:1A                 ldax    d
+     1   8124:CD1582             call    IsWS
+     1   8127:C22F81             jnz     strtrm99
+     1   812A:AF                 xra     a
+     1   812B:12                 stax    d
+     1   812C:C31581             jmp     strtrm10
+     1                   strtrm99:
+     1   812F:F1                 pop     psw
+     1   8130:E1                 pop     h
+     1   8131:C1                 pop     b
+     1   8132:C9                 ret
+     1                   strRemove:
+     1   8133:F5                 push    psw
+     1   8134:E5                 push    h
+     1   8135:D5                 push    d
+     1   8136:E5                 push    h
+     1   8137:D1                 pop     d
+     1   8138:13                 inx     d
+     1                   strrm05:
+     1   8139:1A                 ldax    d
+     1   813A:77                 mov     m,a
+     1   813B:13                 inx     d
+     1   813C:23                 inx     h
+     1   813D:B7                 ora     a
+     1   813E:C23981             jnz     strrm05
+     1   8141:D1                 pop     d
+     1   8142:E1                 pop     h
+     1   8143:F1                 pop     psw
+     1   8144:C9                 ret
+     1                   ; convert charcter to upper case
+     1                   upperCase:
+     1   8145:FE61               cpi     'a'
+     1   8147:DA5181             jc      upc05
+     1   814A:FE7B               cpi     'z'+1
+     1   814C:D25181             jnc     upc05
+     1   814F:D620               sui     020h
+     1                   upc05:
+     1   8151:C9                 ret
+     1                   ; convert charcter to lower case
+     1                   lowerCase:
+     1   8152:FE41               cpi     'A'
+     1   8154:DA5E81             jc      lwc05
+     1   8157:FE5A               cpi     'Z'
+     1   8159:D25E81             jnc     lwc05
+     1   815C:C620               adi     020h
+     1                   lwc05:
+     1   815E:C9                 ret
+     1                   ; locate end of string
+     1                   ; hl - str1
+     1                   ; output - hl - pointer to null terminating byte of str1
+     1                   strend:
+     1   815F:D5                 push    d
+     1   8160:CDEE80             call    strlen
+     1   8163:5F                 mov     e,a
+     1   8164:1600               mvi     d,0
+     1   8166:19                 dad     d
+     1   8167:D1                 pop     d
+     1   8168:C9                 ret
+     1                   ; convert string to binary
+     1                   ; hl - pointer to string
+     1                   ; output bc - value
+     1                   ; carry - set: error
+     1                   char2bin:
+     1   8169:E5                 push    h
+     1   816A:010000             lxi     b,0
+     1                   @@:
+     1   816D:7E                 mov     a,m
+     1   816E:B7                 ora     a
+     1   816F:CA8381             jz      @F
+     1   8172:CD8581             call    ascii2Bin
+     1   8175:DA8381             jc      @F
+     1   8178:CD9C81             call    shlBC4
+     1   817B:E60F               ani     0fh
+     1   817D:B1                 ora     c
+     1   817E:4F                 mov     c,a
+     1   817F:23                 inx     h
+     1   8180:C36D81             jmp     @B
+     1                   @@:
+     1   8183:E1                 pop     h
+     1   8184:C9                 ret
+     1                   ascii2Bin:
+     1   8185:CD0782             call    IsDigit
+     1   8188:DA8F81             jc      @F
+     1   818B:D630               sui     '0'
+     1   818D:B7                 ora     a
+     1   818E:C9                 ret
+     1                   @@:
+     1   818F:CD4581             call    upperCase
+     1   8192:CD0E82             call    IsHexLetter
+     1   8195:D8                 rc
+     1   8196:D641               sui     'A'
+     1   8198:C60A               adi     0ah
+     1   819A:B7                 ora     a
+     1   819B:C9                 ret
+     1                   ; shift BC register left 4 bits.
+     1                   shlBC4:
+     1   819C:D5                 push    d
+     1   819D:1E04               mvi     e,4
+     1   819F:CDA481             call    shlBCe
+     1   81A2:D1                 pop     d
+     1   81A3:C9                 ret
+     1                   shlBCe:
+     1   81A4:F5                 push    psw
+     1   81A5:D5                 push    d
+     1                   shl05:
+     1   81A6:37                 stc
+     1   81A7:3F                 cmc
+     1   81A8:79                 mov     a,c
+     1   81A9:17                 ral
+     1   81AA:4F                 mov     c,a
+     1   81AB:78                 mov     a,b
+     1   81AC:17                 ral
+     1   81AD:47                 mov     b,a
+     1   81AE:1D                 dcr     e
+     1   81AF:C2A681             jnz     shl05
+     1   81B2:D1                 pop     d
+     1   81B3:F1                 pop     psw
+     1   81B4:C9                 ret
+     1                   ; Input
+     1                   ;    hl: command with error
+     1                   cmdError:
+     1   81B5:E5                 push    h
+     1   81B6:21CA81             lxi     h, errMsg1
+     1   81B9:CDE281             call    printf
+     1   81BC:E1                 pop     h
+     1   81BD:CDE281             call    printf
+     1   81C0:21D481             lxi     h, errMsg2
+     1   81C3:CDE281             call    printf
+     1   81C6:CD2382             call    crlf
+     1   81C9:C9                 ret
+     1   81CA:4572726F72 errMsg1:db      'Error in ', 0
+     1   81D4:20636F6D6D errMsg2:db      ' command', 0
+     1                   outPrompt:
+     1   81DD:3E2D               mvi     a,'-'
+     1   81DF:C35380             jmp     UartWrite
+     1                   ; print string to console
+     1                   ; Input
+     1                   ;   HL - string to print (null terminated)
+     1                   ; Output
+     1                   ;   HL byte past end of string
+     1                   printf:
+     1   81E2:7E                 mov     a,m
+     1   81E3:23                 inx     h
+     1   81E4:B7                 ora     a
+     1   81E5:C2E981             jnz     @F
+     1   81E8:C9                 ret
+     1                   @@:
+     1   81E9:CD5380             call    UartWrite
+     1   81EC:C3E281             jmp     printf
+     1                   outColon:
+     1   81EF:F5                 push    psw
+     1   81F0:3E3A               mvi     a,':'
+     1   81F2:CD5380             call    UartWrite
+     1   81F5:F1                 pop     psw
+     1   81F6:C9                 ret
+     1                   outSpace:
+     1   81F7:F5                 push    psw
+     1   81F8:3E20               mvi     a,' '
+     1   81FA:CD5380             call    UartWrite
+     1   81FD:F1                 pop     psw
+     1   81FE:C9                 ret
+     1                   IsHexDigit:
+     1   81FF:CD0782             call    IsDigit
+     1   8202:D0                 rnc
+     1   8203:CD0E82             call    IsHexLetter
+     1   8206:C9                 ret
+     1                   IsDigit:
+     1   8207:FE30               cpi     '0'
+     1   8209:D8                 rc
+     1   820A:FE3A               cpi     '9'+1
+     1   820C:3F                 cmc
+     1   820D:C9                 ret
+     1                   IsHexLetter:
+     1   820E:FE41               cpi     'A'
+     1   8210:D8                 rc
+     1   8211:FE5A               cpi     'Z'
+     1   8213:3F                 cmc
+     1   8214:C9                 ret
+     1                   IsWS:
+     1   8215:B7                 ora     a
+     1   8216:C8                 rz
+     1   8217:FE20               cpi     SPACE
+     1   8219:C8                 rz
+     1   821A:FE09               cpi     TAB
+     1   821C:C8                 rz
+     1   821D:FE0D               cpi     CR
+     1   821F:C8                 rz
+     1   8220:FE0A               cpi     LF
+     1   8222:C9                 ret
+     1                   crlf:
+     1   8223:F5                 push    psw
+     1   8224:3E0D               mvi     a,CR
+     1   8226:CD5380             call    UartWrite
+     1   8229:3E0A               mvi     a,LF
+     1   822B:CD5380             call    UartWrite
+     1   822E:F1                 pop     psw
+     1   822F:C9                 ret
+     1                   ; hl has number
+     1                   dhexOut:
+     1   8230:7C                 mov     a,h
+     1   8231:CD3982             call    hexOut
+     1   8234:7D                 mov     a,l
+     1   8235:CD3982             call    hexOut
+     1   8238:C9                 ret
+     1                   hexOut:
+     1   8239:F5                 push    psw
+     1   823A:C5                 push    b
+     1   823B:4F                 mov     c,a
+     1   823C:1F                 rar
+     1   823D:1F                 rar
+     1   823E:1F                 rar
+     1   823F:1F                 rar
+     1   8240:E60F               ani     0fh
+     1   8242:CD5482             call    nibbleToAscii
+     1   8245:CD5380             call    UartWrite
+     1   8248:79                 mov     a,c
+     1   8249:E60F               ani     0fh
+     1   824B:CD5482             call    nibbleToAscii
+     1   824E:CD5380             call    UartWrite
+     1   8251:C1                 pop     b
+     1   8252:F1                 pop     psw
+     1   8253:C9                 ret
+     1                   nibbleToAscii:
+     1   8254:FE0A               cpi             0ah
+     1   8256:DA5B82             jc              @F
+     1   8259:C607               adi             07
+     1                   @@:
+     1   825B:C630               adi             30h
+     1   825D:C9                 ret
+     1                   ;       include dump.asm
+     1                   ;       include move.asm
+     1                   ;       include compare.asm
+     1                   ;       include fill.asm
+     1                   ;       include unassemble.asm
+     1                   ;       include OpCode.asm
+     1                   ;       include registers.asm
+     1                   ; load a hex file from the console into memory
+     1                   Load:
+     1   825E:21FFFF             lxi     h,0ffffh
+     1   8261:229E83             shld    startHex
+     1   8264:217E82             lxi     h,ldwaitMsg
+     1   8267:CDE281             call    printf
+     1   826A:CD2382             call    crlf
+     1                   @@:
+     1   826D:CDAC82             call    ldGetline
+     1   8270:B7                 ora     a
+     1   8271:C26D82             jnz     @B
+     1   8274:2A9E83             lhld    startHex
+     1   8277:22A883             shld    savPC
+     1   827A:229C83             shld    lastUnassemble
+     1   827D:C9                 ret
+     1   827E:5761697469 ldwaitMsg:      db      'Waiting for hex file upload ....', 0
+     1                   ;; set the load start address if it has not been set yet.
+     1                   ; Input HL - address to set
+     1                   setStart:
+     1   829F:E5                 push    h
+     1   82A0:2A9E83             lhld    startHex
+     1   82A3:23                 inx     h
+     1   82A4:7C                 mov     a,h
+     1   82A5:B5                 ora     l
+     1   82A6:E1                 pop     h
+     1   82A7:C0                 rnz
+     1   82A8:229E83             shld    startHex
+     1   82AB:C9                 ret
+     1                   ;;;;  :10DC0000C35CDFC358DF7F00436F70797269676858
+     1                   ;;;;:0000000000
+     1                   ; get 1 line of the hex file
+     1                   ; Output
+     1                   ; a: more bytes to get 0 if no
+     1                   ;                      1 if yes
+     1                   ldGetline:
+     1   82AC:CD4A80             call    UartRead
+     1   82AF:FE3A               cpi     ':'
+     1   82B1:C2AC82             jnz     ldGetline
+     1   82B4:3E2E               mvi     a,'.'
+     1   82B6:CD5380             call    UartWrite
+     1   82B9:CDEC82             call    ldGetByte
+     1   82BC:B7                 ora     a
+     1   82BD:C2CE82             jnz     hxgt10
+     1                   ; end of file reached, eat the last line
+     1   82C0:CDEC82             call    ldGetByte
+     1   82C3:CDEC82             call    ldGetByte
+     1   82C6:CDEC82             call    ldGetByte
+     1   82C9:CDEC82             call    ldGetByte
+     1   82CC:AF                 xra     a
+     1   82CD:C9                 ret
+     1                   hxgt10:
+     1   82CE:4F                 mov     c,a                             ; length
+     1   82CF:CDEC82             call    ldGetByte
+     1   82D2:67                 mov     h,a
+     1   82D3:CDEC82             call    ldGetByte
+     1   82D6:6F                 mov     l,a
+     1   82D7:CD9F82             call    setStart
+     1   82DA:CDEC82             call    ldGetByte                       ; discard
+     1                   hxgt05:
+     1   82DD:CDEC82             call    ldGetByte
+     1   82E0:77                 mov     m,a
+     1   82E1:23                 inx     h
+     1   82E2:0D                 dcr     c
+     1   82E3:C2DD82             jnz     hxgt05
+     1   82E6:CDEC82             call    ldGetByte                       ; checksum
+     1   82E9:3E01               mvi     a,1
+     1   82EB:C9                 ret
+     1                   ldGetByte:
+     1   82EC:C5                 push    b
+     1   82ED:E5                 push    h
+     1   82EE:210683             lxi     h,commandText
+     1   82F1:E5                 push    h
+     1   82F2:CD4A80             call    UartRead
+     1   82F5:77                 mov     m,a
+     1   82F6:23                 inx     h
+     1   82F7:CD4A80             call    UartRead
+     1   82FA:77                 mov     m,a
+     1   82FB:23                 inx     h
+     1   82FC:3600               mvi     m,0
+     1   82FE:E1                 pop     h
+     1   82FF:CD6981             call    char2bin
+     1   8302:79                 mov     a,c
+     1   8303:E1                 pop     h       
+     1   8304:C1                 pop     b
+     1   8305:C9                 ret
+     1                   ;       include Trace.asm
+     1                   ;       include io.asm
+     1                   ;       include enter.asm
+     1                   ;       include go.asm
+     1                   ;       include cpm.asm
+     1                   ;       include SRegisterTest.asm
+     1                   ;       org             ramStart
+     1   8306:FFFFFFFFFF commandText:    ds      32
+     1                   PARM_SIZE       equ     16
+     1                   argv:
+     1   8326:FFFFFFFFFF param1:         ds      PARM_SIZE
+     1   8336:FFFFFFFFFF param2:         ds      PARM_SIZE
+     1   8346:FFFFFFFFFF param3:         ds      PARM_SIZE
+     1   8356:FFFFFFFFFF param4:         ds      PARM_SIZE
+     1   8366:FFFFFFFFFF param5:         ds      PARM_SIZE
+     1                   dynInOutCmd:
+     1   8376:FF                         ds              1
+     1   8377:FF                         ds              1
+     1   8378:FF                         ds              1
+     1   8379:FFFF       userSP:         ds              2
+     1                   MAXBPT                  equ     8
+     1   837B:FF         numBreakPt:             ds      1
+     1   837C:FFFFFFFFFF breakPtAddr:    ds      MAXBPT*2
+     1   838C:FFFFFFFFFF breakPtByte:    ds      MAXBPT
+     1   8394:FFFF       lastdump:               ds      2
+     1   8396:FF         regEdit:        ds      1
+     1   8397:FFFF       opCodePtr:              ds      2
+     1   8399:FFFF       opCodeTablePtr: ds      2
+     1   839B:FF         numBytes:       ds      1
+     1   839C:FFFF       lastUnassemble: ds      2
+     1   839E:FFFF       startHex:       ds      2
+     1                   RegisterFile:
+     1   83A0:FF                         ds      1               ; C
+     1   83A1:FF                         ds      1               ; B
+     1   83A2:FF                         ds      1               ; E
+     1   83A3:FF                         ds      1               ; D
+     1   83A4:FF         savHL:          ds      1               ; L
+     1   83A5:FF                         ds      1               ; H
+     1   83A6:FFFF       savSP:          ds      2               ; SP
+     1   83A8:FFFF       savPC:          ds      2               ; PC
+     1   83AA:FF         savFgs:         ds      1               ; Flags
+     1   83AB:FF                         ds      1               ; A
+     1   83AC:FF         intMask:ds      1               ; Interupt Mask (RIM)
+     1                   ; Z80 ram variables.
+     1   83AD:FFFF       bittim          ds      2
+     1   83AF:FFFF       halfbt          ds      2
+     1                   memorySize      equ     $-ramStart
+     1   83B1:FFFFFFFFFF                 ds      512
+     1                   stack:

@@ -1,0 +1,646 @@
+CR		equ	0dh
+LF		equ	0ah
+SPACE		equ	020h
+BACKSPACE	equ	08h
+TAB		equ	09h
+;retOpcode	equ	0c9h
+;ramStart	equ	08000h
+
+	org	08000h
+	lxi	sp,stack
+	call	UartInit
+
+	lxi	h,mns01
+	call	printf
+	lhld	bittim
+	call	dhexOut
+	call	crlf
+
+	lxi	h,mns02
+	call	printf
+	lhld	halfbt
+	call	dhexOut
+	call	crlf
+
+	mvi	a,'-'
+	call	UartWrite
+@@:
+	call	UartRead
+	call	UartWrite
+	jmp	@B
+mns01:	db	'bittim:', 0
+mns02:	db	'halfbt:', 0
+
+;	include main.asm
+serial_port	equ	40h
+data_bit	equ	80h
+
+UartInit:
+	mvi	a,80h
+	out	serial_port	; set serial line high
+	call	brid
+	ret
+UartRead:
+	push	b
+	push	h
+	call	cin
+	mov	a,c
+	pop	h
+	pop	b
+	ret
+UartWrite:
+	push	b
+	push	h
+	mov	c,a
+	call	cout
+	pop	h
+	pop	b
+	ret
+
+
+;
+;  BRID - Determine the baud rate of the terminal. This routine
+; actually finds the proper divisors BITTIM and HALFBT to run CIN
+; and COUT properly.
+;
+;   The routine expects a space. It looks at the 6 zeroes in the
+; 20h stream from the serial port and counts time from the start
+; bit to the first 1.
+;
+;  serial_port is the port address of the input data. data_bit
+; is the bit mask.
+;
+brid:
+	in	serial_port
+	ani	data_bit
+	jz	brid		; loop till serial not busy
+
+bri1:
+	in	serial_port
+	ani	data_bit
+	jnz	bri1 		; loop till start bit comes
+
+	lxi	h,-7		; bit count
+bri3:
+	mvi	e,3
+bri4:	
+	dcr	e		; 42 machine cycle loop
+	jnz	bri4
+
+	nop			; balance cycle counts
+	inx	h		; inc counter every 98 cycles
+				; while serial line is low
+	in	serial_port
+	ani	data_bit
+	jz	bri3		; loop while serial line low
+
+	push	h		; save count for halfbt computation
+	inr	h
+	inr	l		; add 101h w/o doing internal carry
+	shld	bittim		; save bit time
+	pop	h		; restore count
+
+	xra	a		; clear carry
+	mov	a,h		; compute hl/2
+	rar
+	mov	h,a
+	mov	a,l
+	rar
+	mov	l,a		; hl=count/2
+	inr	h
+	inr	l		; add 101h w/o doing internal carry
+	shld	halfbt
+	ret
+
+;
+; Output the character in C
+;
+;  Bittime has the delay time per bit, and is computed as:
+;
+;  <HL>' = ((freq in Hz/baudrate) - 98 )/14
+;  BITTIM = <HL>'+101H  (with no internal carry prop between bytes)
+;
+; and OUT to serial_high sets the serial line high; an OUT
+; to serial_low sets it low, regardless of the contents set to the
+; port.
+;
+cout:
+	mvi	b,11		; # bits to send (start, 8 data, 2 stop)
+	xra	a		; clear carry for start bit
+co1:
+	jnc	cc1		; if carry, will set line high
+	mvi	a,data_bit
+	out	serial_port	; set serial line high
+	jmp	cc2
+cc1:
+	mvi	a,0
+	out	serial_port	; set serial line low
+	jmp	cc2		; idle; balance # cycles with those from setting output high
+cc2:
+	lhld	bittim		; time per bit
+co2:
+	dcr	l
+	jnz	co2		; idle for one bit time
+	dcr	h
+	jnz	co2		; idle for one bit time
+
+	stc			; set carry high for next bit
+	mov	a,c		; a=character
+	rar			; shift it into the carry
+	mov	c,a
+	dcr	b		; --bit count
+	jnz	co1		; send entire character
+	ret
+
+;
+;  CIN - input a character to C.
+;
+;  HALFBT is the time for a half bit transition on the serial input
+; line. It is calculated as follows:
+;   (BITTIM-101h)/2 +101h
+;
+cin:
+	mvi	b,9		; bit count (start + 8 data)
+	mvi	c,0
+ci1:
+	in	serial_port	; read serial line
+	ani	data_bit	; isolate serial bit
+	jnz	ci1		; wait till serial data comes
+
+	lhld	halfbt		; get 1/2 bit time
+ci2:
+	dcr	l
+	jnz	ci2		; wait till middle of start bit
+	dcr	h
+	jnz	ci2
+ci3:
+	lhld	bittim		; bit time
+ci4:
+	dcr	l
+	jnz	ci4		; now wait one entire bit time
+	dcr	h
+	jnz	ci4
+
+	in	serial_port	; read serial character
+	ani	data_bit	; isolate serial data
+	jz	ci6		; j if data is 0
+	inr	a		; now register A=serial data
+ci6:
+	rar			; rotate it into carry
+
+	dcr	b		; dec bit count
+	jz	ci5		; j if last bit
+	mov	a,c		; this is where we assemble char
+	rar			; rotate it into the character from carry
+	mov	c,a
+	nop			; delay so timing matches that in output routine
+	jmp	ci3		; do next bit
+ci5:
+	ret
+; returns length of null terminated string
+; hl - ptr to string
+; returns a: length of string
+strlen:
+	push	b
+	push	h
+	mvi	b,0
+strlen05:
+	mov	a,m
+	cpi	0
+	jz	strlen99
+	inx	h
+	inr	b
+	jmp	strlen05
+strlen99:
+	mov	a,b
+	pop	h
+	pop	b
+	ret
+
+; remove leading and traing whitespace from string
+strtrim:
+	push	b
+	push	h
+	push	psw
+strtrm05:
+	mov	a,m
+	ora	a
+	jz	strtrm10
+	call	IsWS
+	jnz	strtrm10
+	call	strRemove
+	jmp	strtrm05
+strtrm10:
+	call	strlen
+	ora	a
+	jz	strtrm99
+
+	push	h
+	call	strend
+	xchg
+	pop	h
+
+	dcx	d
+	ldax	d
+	call	IsWS
+	jnz	strtrm99
+	xra	a
+	stax	d
+	jmp	strtrm10
+strtrm99:
+	pop	psw
+	pop	h
+	pop	b
+	ret
+
+strRemove:
+	push	psw
+	push	h
+	push	d
+	push	h
+	pop	d
+	inx	d
+strrm05:
+	ldax	d
+	mov	m,a
+	inx	d
+	inx	h
+	ora	a
+	jnz	strrm05
+	pop	d
+	pop	h
+	pop	psw
+	ret
+
+; convert charcter to upper case
+upperCase:
+	cpi	'a'
+	jc	upc05
+	cpi	'z'+1
+	jnc	upc05
+	sui	020h
+upc05:
+	ret
+
+; convert charcter to lower case
+lowerCase:
+	cpi	'A'
+	jc	lwc05
+	cpi	'Z'
+	jnc	lwc05
+	adi	020h
+lwc05:
+	ret
+
+; locate end of string
+; hl - str1
+; output - hl - pointer to null terminating byte of str1
+strend:
+	push	d
+	call	strlen
+	mov	e,a
+	mvi	d,0
+	dad	d
+	pop	d
+	ret
+
+; convert string to binary
+; hl - pointer to string
+; output bc - value
+; carry - set: error
+char2bin:
+	push	h
+	lxi	b,0
+@@:
+	mov	a,m
+	ora	a
+	jz	@F
+	call	ascii2Bin
+	jc	@F
+
+	call	shlBC4
+	ani	0fh
+	ora	c
+	mov	c,a
+	inx	h
+	jmp	@B
+@@:
+	pop	h
+	ret
+
+ascii2Bin:
+	call	IsDigit
+	jc	@F
+	sui	'0'
+	ora	a
+	ret
+@@:
+	call	upperCase
+	call	IsHexLetter
+	rc
+	sui	'A'
+	adi	0ah
+	ora	a
+	ret
+
+; shift BC register left 4 bits.
+shlBC4:
+	push	d
+	mvi	e,4
+	call	shlBCe
+	pop	d
+	ret
+
+shlBCe:
+	push	psw
+	push	d
+shl05:
+	stc
+	cmc
+	mov	a,c
+	ral
+	mov	c,a
+	mov	a,b
+	ral
+	mov	b,a
+	dcr	e
+	jnz	shl05
+
+	pop	d
+	pop	psw
+	ret
+
+; Input
+;    hl: command with error
+cmdError:
+	push	h
+	lxi	h, errMsg1
+	call	printf
+	pop	h
+	call	printf
+	lxi	h, errMsg2
+	call	printf
+	call	crlf
+	ret
+errMsg1:	db	'Error in ', 0
+errMsg2:	db	' command', 0
+
+outPrompt:
+	mvi	a,'-'
+	jmp	UartWrite
+
+; print string to console
+; Input
+;   HL - string to print (null terminated)
+; Output
+;   HL byte past end of string
+printf:
+	mov	a,m
+	inx	h
+	ora	a
+	jnz	@F
+	ret
+@@:
+	call	UartWrite
+	jmp	printf
+
+outColon:
+	push	psw
+	mvi	a,':'
+	call	UartWrite
+	pop	psw
+	ret
+
+outSpace:
+	push	psw
+	mvi	a,' '
+	call	UartWrite
+	pop	psw
+	ret
+
+IsHexDigit:
+	call	IsDigit
+	rnc
+	call	IsHexLetter
+	ret
+IsDigit:
+	cpi	'0'
+	rc
+	cpi	'9'+1
+	cmc
+	ret
+IsHexLetter:
+	cpi	'A'
+	rc
+	cpi	'Z'
+	cmc
+	ret
+IsWS:
+	ora	a
+	rz
+	cpi	SPACE
+	rz
+	cpi	TAB
+	rz
+	cpi	CR
+	rz
+	cpi	LF
+	ret
+
+crlf:
+	push	psw
+	mvi	a,CR
+	call	UartWrite
+	mvi	a,LF
+	call	UartWrite
+	pop	psw
+	ret
+
+; hl has number
+dhexOut:
+	mov	a,h
+	call	hexOut
+	mov	a,l
+	call	hexOut
+	ret
+hexOut:
+	push	psw
+	push	b
+	mov	c,a
+	rar
+	rar
+	rar
+	rar
+	ani	0fh
+	call	nibbleToAscii
+	call	UartWrite
+	mov	a,c
+	ani	0fh
+	call	nibbleToAscii
+	call	UartWrite
+	pop	b
+	pop	psw
+	ret
+
+nibbleToAscii:
+	cpi		0ah
+	jc		@F
+	adi		07
+@@:
+	adi		30h
+	ret
+;	include dump.asm
+;	include move.asm
+;	include compare.asm
+;	include fill.asm
+;	include unassemble.asm
+;	include OpCode.asm
+;	include registers.asm
+; load a hex file from the console into memory
+Load:
+	lxi	h,0ffffh
+	shld	startHex
+	lxi	h,ldwaitMsg
+	call	printf
+	call	crlf
+@@:
+	call	ldGetline
+	ora	a
+	jnz	@B
+
+	lhld	startHex
+	shld	savPC
+	shld	lastUnassemble
+	ret
+ldwaitMsg:	db	'Waiting for hex file upload ....', 0
+
+;; set the load start address if it has not been set yet.
+; Input HL - address to set
+setStart:
+	push	h
+	lhld	startHex
+	inx	h
+	mov	a,h
+	ora	l
+	pop	h
+	rnz
+	shld	startHex
+	ret
+
+;;;;  :10DC0000C35CDFC358DF7F00436F70797269676858
+;;;;:0000000000
+; get 1 line of the hex file
+; Output
+; a: more bytes to get 0 if no
+;                      1 if yes
+ldGetline:
+	call	UartRead
+	cpi	':'
+	jnz	ldGetline
+
+	mvi	a,'.'
+	call	UartWrite
+
+	call	ldGetByte
+	ora	a
+	jnz	hxgt10
+; end of file reached, eat the last line
+	call	ldGetByte
+	call	ldGetByte
+	call	ldGetByte
+	call	ldGetByte
+	xra	a
+	ret
+hxgt10:
+	mov	c,a				; length
+	call	ldGetByte
+	mov	h,a
+	call	ldGetByte
+	mov	l,a
+	call	setStart
+	call	ldGetByte			; discard
+hxgt05:
+	call	ldGetByte
+	mov	m,a
+	inx	h
+	dcr	c
+	jnz	hxgt05
+	call	ldGetByte			; checksum
+	mvi	a,1
+	ret
+
+ldGetByte:
+	push	b
+	push	h
+	lxi	h,commandText
+	push	h
+	call	UartRead
+	mov	m,a
+	inx	h
+	call	UartRead
+	mov	m,a
+	inx	h
+	mvi	m,0
+	pop	h
+	call	char2bin
+	mov	a,c
+	pop	h	
+	pop	b
+	ret
+;	include Trace.asm
+;	include io.asm
+;	include enter.asm
+;	include go.asm
+;	include cpm.asm
+;	include SRegisterTest.asm
+
+;	org		ramStart
+commandText:	ds	32
+
+PARM_SIZE	equ	16
+argv:
+param1:		ds	PARM_SIZE
+param2:		ds	PARM_SIZE
+param3:		ds	PARM_SIZE
+param4:		ds	PARM_SIZE
+param5:		ds	PARM_SIZE
+
+dynInOutCmd:
+		ds		1
+		ds		1
+		ds		1
+userSP:		ds		2
+
+MAXBPT			equ	8
+numBreakPt:		ds	1
+breakPtAddr:	ds	MAXBPT*2
+breakPtByte:	ds	MAXBPT
+lastdump:		ds	2
+regEdit:		ds	1
+opCodePtr:		ds	2
+opCodeTablePtr:	ds	2
+numBytes:	ds	1
+lastUnassemble:	ds	2
+startHex:	ds	2
+RegisterFile:
+		ds	1		; C
+		ds	1		; B
+		ds	1		; E
+		ds	1		; D
+savHL:		ds	1		; L
+		ds	1		; H
+savSP:		ds	2		; SP
+savPC:		ds	2		; PC
+savFgs:		ds	1		; Flags
+		ds	1		; A
+intMask:	ds	1		; Interupt Mask (RIM)
+
+; Z80 ram variables.
+bittim		ds	2
+halfbt		ds	2
+
+
+memorySize	equ	$-ramStart
+		ds	512
+stack:
+	end
