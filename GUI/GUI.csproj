@@ -1,0 +1,182 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{DCA98BB2-7A6D-4851-B801-1125B28754BD}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>GUI</RootNamespace>
+    <AssemblyName>GUI</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Antlr4.Runtime.Standard, Version=4.7.0.0, Culture=neutral, PublicKeyToken=e78b2c5abd1fcb3f, processorArchitecture=MSIL">
+      <HintPath>..\packages\Antlr4.Runtime.Standard.4.7.1\lib\net35\Antlr4.Runtime.Standard.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+    <Reference Include="WeifenLuo.WinFormsUI.Docking, Version=2.1.6643.41644, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\WeifenLuo.WinFormsUI.Docking.2.1.0\lib\net20\WeifenLuo.WinFormsUI.Docking.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Arithmetic\AddressExpression.cs" />
+    <Compile Include="Arithmetic\ArithmeticVisitor.cs" />
+    <Compile Include="Arithmetic\GeneratedFiles\ArithmeticBaseListener.cs" />
+    <Compile Include="Arithmetic\GeneratedFiles\ArithmeticBaseVisitor.cs" />
+    <Compile Include="Arithmetic\GeneratedFiles\ArithmeticLexer.cs" />
+    <Compile Include="Arithmetic\GeneratedFiles\ArithmeticListener.cs" />
+    <Compile Include="Arithmetic\GeneratedFiles\ArithmeticParser.cs" />
+    <Compile Include="Arithmetic\GeneratedFiles\ArithmeticVisitor.cs" />
+    <Compile Include="Board\BoardView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Board\BoardView.Designer.cs">
+      <DependentUpon>BoardView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Code\CodeView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Code\CodeView.Designer.cs" />
+    <Compile Include="Code\ProgramImage.cs" />
+    <Compile Include="IView.cs" />
+    <Compile Include="Memory\MemoryConfig.cs" />
+    <Compile Include="Memory\MemoryView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Memory\MemoryView.Designer.cs">
+      <DependentUpon>MemoryView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="OpCodeTrace\OpcodeTraceView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="OpCodeTrace\OpcodeTraceView.Designer.cs">
+      <DependentUpon>OpcodeTraceView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Output\OutputView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Output\OutputView.Designer.cs">
+      <DependentUpon>OutputView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Registers\RegistersView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Registers\RegistersView.Designer.cs">
+      <DependentUpon>RegistersView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Stack\StackConfig.cs" />
+    <Compile Include="Stack\StackView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Stack\StackView.Designer.cs">
+      <DependentUpon>StackView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ToolWindows.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ToolWindows.Designer.cs">
+      <DependentUpon>ToolWindows.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Watch\AddWatchItem.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Watch\AddWatchItem.Designer.cs">
+      <DependentUpon>AddWatchItem.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Watch\Watch.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Watch\Watch.Designer.cs">
+      <DependentUpon>Watch.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Watch\WatchConfig.cs" />
+    <Compile Include="Watch\WatchItem.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Board\BoardView.resx">
+      <DependentUpon>BoardView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Code\CodeView.resx" />
+    <EmbeddedResource Include="Memory\MemoryView.resx">
+      <DependentUpon>MemoryView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="OpCodeTrace\OpcodeTraceView.resx">
+      <DependentUpon>OpcodeTraceView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Output\OutputView.resx">
+      <DependentUpon>OutputView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Registers\RegistersView.resx">
+      <DependentUpon>RegistersView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Stack\StackView.resx">
+      <DependentUpon>StackView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ToolWindows.resx">
+      <DependentUpon>ToolWindows.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Watch\AddWatchItem.resx">
+      <DependentUpon>AddWatchItem.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Watch\Watch.resx">
+      <DependentUpon>Watch.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Arithmetic\GrammarFiles\Arithmetic.g4" />
+    <None Include="Arithmetic\GrammarFiles\run.cmd" />
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Boards\Boards.csproj">
+      <Project>{cdc65fac-f3e2-475a-a82f-819b1ab8947c}</Project>
+      <Name>Boards</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Parsers\Parsers.csproj">
+      <Project>{16892b76-fd08-4374-8421-d4d1259218c3}</Project>
+      <Name>Parsers</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Processors\Processors\Processors.csproj">
+      <Project>{11d61a7e-4ac5-4a6a-9b2a-a626066e528c}</Project>
+      <Name>Processors</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Arithmetic\Java\antlr-4.7.1-complete.jar" />
+    <Content Include="Arithmetic\Java\antlr-4.9.2-complete.jar" />
+    <Content Include="Arithmetic\Java\antlr-runtime-4.9.2.jar" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
