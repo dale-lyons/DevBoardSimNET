@@ -1,0 +1,1255 @@
+     1                   ;********************************************************************************
+     1                   ;               PROGRAM: SDK-85 MONITOR VER 2.1
+     1                   ;
+     1                   ;       
+     1                   ;               
+     1                   ;               
+     1                   ;               
+     1                   ;
+     1                   ;
+     1                   ;********************************************************************************
+     1                   ;
+     1                   ; ABSTRACT
+     1                   ; ========
+     1                   ;
+     1                   ;       THIS PROGRAM IS A SMALL MONITOR FOR THE INTEL 8085 KIT AND
+     1                   ;       PROVIDES A MINIMUM LEVEL OF UTILITY FUNCTIONS FOR THE USER EMPLOYING
+     1                   ;       EITHER AN INTER-ACTIVE CONSOLE (I.E. TELETYPE) OR THE KIT'S
+     1                   ;       KEYBOARD/LED DISPLAY. THE KEYBOARD MONITOR ALLOWS THE USER TO PERFORM
+     1                   ;       SUCH FUNCTIONS AS MEMORY AND REGISTER MANIPULATION, PROGRAM LOADING,
+     1                   ;       PROGRAM EXECUTION, INTERRUPTION OF AN EXECUTING PROGRAM, AND
+     1                   ;       SYSTEM RESET.
+     1                   ;
+     1                   ;PROGRAM ORGANIZATION
+     1                   ;======= ============
+     1                   ;
+     1                   ;THE PROGRAM IS ORGANIZED AS FOLLOWS:-
+     1                   ;       1) COLD START ROUTINE (RESET)
+     1                   ;       2) WARM START - REGISTER SAVE ROUTINE
+     1                   ;       3) INTERRUPT VECTORS
+     1                   ;       4) KEYBOARD MONITOR
+     1                   ;       5) TTY MONITOR
+     1                   ;       6) LAYOUT OF RAM USAGE
+     1                   ;
+     1                   ;       THE KEYBOARD MONITOR BEGINS WITH THE COMMAND RECOGNIZER, FOLLOWED BY
+     1                   ;       THE COMMAND ROUTINE SECTION, UTILITY ROUTINE SECTION AND MONITOR
+     1                   ;       TABLES. THE COMMAND AND UTILITY ROUTINES ARE IN ALPHABETICAL ORDER
+     1                   ;       WITHIN THEIR RESPECTIVE SECTIONS.
+     1                   ;       THROUGHOUT THE KEYBOARD MONITOR, A COMMENT FIELD BEGINNING
+     1                   ;       WITH "ARG - " INDICATES A STATEMENT WHICH LOADS A VALUE INTO
+     1                   ;       A REGISTER AS AN ARGUMENT FOR A FUNCTION. WHEN THE DESIRED VALUE
+     1                   ;       LIST OF KEYBOARD MONITOR ROUTINES
+     1                   ;
+     1                   ;
+     1                   ;CMMND
+     1                   ;-----
+     1                   ;       EXAM
+     1                   ;       GOCMD
+     1                   ;       SSTEP
+     1                   ;       SUBST
+     1                   ;       -----
+     1                   ;       CLEAR
+     1                   ;       CLDIS
+     1                   ;       CLDST
+     1                   ;       DISPC
+     1                   ;       ERR
+     1                   ;       GTBEX
+     1                   ;       HXDSP
+     1                   ;       ININT
+     1                   ;       INSDG
+     1                   ;       NXTRG
+     1                   ;       OUT PT
+     1                   ;       RDKBD
+     1                   ;       RETF
+     1                   ;       RETT
+     1                   ;       RGLOC
+     1                   ;       RSTOR
+     1                   ;       SETRG
+     1                   ;       UPDAD
+     1                   ;       UPDDT
+     1                   ;
+     1                   ;                           NAMEADVANCED SDK-85
+     1                   ;
+     1                   ;************************************************************************************
+     1                   ;
+     1                   ;                       SET CONDITIONAL ASSEMBLY FLAG
+     1                   ;
+     1                   ;************************************************************************************
+     1                   ;
+     1                   ;
+     1                   ;WAITS SET      0       ;0 = N0 WAIT STATES
+     1                                           ;1 = A  WAIT STATE IS GENERATED FOR EVERY M CYCLE
+     1                                           ;THE APPROPRIATE DELAY TIME MUST BE USED FOR
+     1                                           ;TTY DELAY OR SET UP SINGLE
+     1                                           ;STEP TIMER FOR EACH CASE
+     1                   ;
+     1                   ;
+     1                   ;*************************************************************************************
+     1                   ;
+     1                   ;                               MONITOR EQUATES
+     1                   ;
+     1                   ;*************************************************************************************
+     1                   ;
+     1                   RAMST EQU       2000H   ;START ADDRESS OF RAM - THIS PROGRAM ASSUMES
+     1                                           ;THAT 256 BYTES OF RANDOM ACCESS MEMORY BEGIN AT THIS ADDRESS.
+     1                                           ;THE PROGRAM USES STORAGE AT THE END OF THIS SPACE FOR VARIABLES,
+     1                                           ;SAVING REGISTERS AND THE PROGRAM STACK
+     1                   ;
+     1                   RMUSE           EQU     23      ;RAM USAGE- CURRENTLY,23 BYTES ARE USED FOR
+     1                                                   ;/SAVING REGISTERS AND VARIABLES
+     1                   ;
+     1                   SKLN            EQU     24      ;MONITOR STACK USAGE- MAX OF 12 LEVELS
+     1                   ;
+     1                   UBRLN           EQU     15      ;5 USER BRANCHES-3 BYTES EACH
+     1                   ;CURDT
+     1                   ADFLD           EQU     0       ;INDICATES USE OF ADDRESS FIELD OF DISPLAY
+     1                   ADISP           EQU     90H     ;CONTROL CHARACTER TO INDICATE OUTPUT TO
+     1                                                   ;/ADDRESS FIELD OF DISPLAY
+     1                   CNTRL           EQU     1900H   ;ADDRESS FOR SENDING CONTROL CHARACTERS TO
+     1                                                   ;/DISPLAY CHIP
+     1                   COMMA   EQU     11H     ;COMMA FROM KEYBOARD
+     1                   CSNIT           EQU     0       ;INITIAL VALUE FOR COMMAND STATUS REGISTER
+     1                   CSR             EQU     20H     ;OUTPUT PORT FOR COMMAND STATUS REGISTER
+     1                   DDISP           EQU     94H     ;CONTROL CHARACTER TO INDICATE OUTPUT TO
+     1                                                   ;/DATA FIELD OF DISPLAY
+     1                   DOT             EQU     1       ;INDICATOR FOR DOT IN DISPLAY
+     1                   DSPLY           EQU     1800H   ;ADDRESS FOR SENDING CHARACTERS TO DISPLAY
+     1                   DTFLD           EQU     1       ;INDICATES USE OF DATA FIELD OF DISPLAY
+     1                   DTMSK           EQU     08H     ;MASK FOR TURNING ON DOT IN DISPLAY
+     1                   EMPTY           EQU     80H     ;HIGH ORDER 1 INDICATES EMPTY INPUT BUFFER
+     1                   KBNIT           EQU     0CCH    ;CONTROL CHARACTER TO SET DISPLAY OUTPUT TO
+     1                                                   ;ALL ONES DURING BLANKING PERIOD
+     1                   KMODE           EQU     0       ; CONTROL CHAR. TO SET KEYBOARD/DISPLAY MODE
+     1                                                   ;(2 KEY ROLLOVER,8 CHARACTER LEFT ENTRY)
+     1                   ;MNSTK          EQU     RAMST + 256 - RMUSE ;START OF MONITOR STACK
+     1                   NODOT   EQU     0       ;INDICATOR FOR NO DOT IN DISPLAY
+     1                   ;NUMC-DEFINED LATER             ;NUMBER OF COMMANDS
+     1                   ;NUMRG-DEFINED LATER            ;NUMBER OF REGISTER SAVE LOCATIONS
+     1                   PERIO           EQU     10H     ;PERIOD FROM KEYBOARD
+     1                   PRMPT           EQU     0FBH    ;PROMPT CHARACTER FOR DISPLAY   (DASH)
+     1                   READ            EQU     40H     ;CONTROL CHARACTER TO INDICATE INPUT FROM
+     1                                                   ;/KEYBOARD
+     1                   TIMHI           EQU     25H     ;OUTPUT PORT FOR HIGH ORDER BYTE OF TIMER VALUE
+     1                   TIMLO           EQU     24H     ;OUTPUT PORT FOR LOW ORDER BYTE OF TIMER VALUE
+     1                   TMODE           EQU     40H     ;TIMER MODE - SQUARE WAVE, AUTO RELOAD
+     1                   TSTRT           EQU     0C0H    ;START TIMER
+     1                   UNMSK           EQU     0EH     ;UNMASK INPUT INTERRUPT
+     1                   ;USRBR          EQU     RAMST + 256-(RMUSE+ SKLN+UBRLN) ;START OF USER
+     1                                                                           ;/BRANCH LOCATIONS
+     1                   ;       IF      1-WAITS         ;TIMER VALUE FOR SINGLE STEP IF NO WAIT STATE
+     1                   ;TIMER          EQU     197
+     1                   ;       ENDIF
+     1                   ;       IF      WAITS           ;TIMER VALUE FOR SINGLE STEP IF ONE WAIT STATE INSERTED
+     1                   TIMER           EQU     237
+     1                   ;       ENDIF
+     1                   ;
+     1                   ;**************************************************************************************************************
+     1                   ;
+     1                   ;                                       MONITOR MACROS
+     1                   ;
+     1                   ;***************************************************************************************************************
+     1                   ;
+     1                   ;       TRUE    MACRO WHERE     ;BRANCH IF FUNCTION RETURNS TRUE
+     1                   ;       JC      WHERE
+     1                   ;       ENDM
+     1                           ;
+     1                   ;       FALSE   MACRO WHERE     ;BRANCH IF FUNCTION RETURNS FALSE
+     1                   ;       JNC     WHERE
+     1                   ;       ENDM
+     1                   ;
+     1                   ;
+     1                   ;***************************************************************************************************************
+     1                   ;
+     1                   ;*********  "RESET" KEY ENTRY POINT- COLD START
+     1                   ;********** RST 0 ENTRY POINT
+     1                   ;
+     1   0000:3E00               MVI     A,KMODE         ;GET CONTROL CHARACTER
+     1   0002:320019             STA     CNTRL           ;SET KEYBOARD/DISPLAY MODE
+     1   0005:C3F101             JMP     CLDST           ;GO FINISH COLD START
+     1                   CLDBK:                          ;THEN JUMP BACK HERE
+     1                   ;*********  RST 1 ENTRY POINT - WARM START
+     1                   ;
+     1                           ORG     8
+     1                   ;       SAVE REGISTERS
+     1   0008:22EF20             SHLD    LSAV            ;SAVE H & L REGISTERS
+     1   000B:E1                 POP     H               ;GET USER PROGRAM COUNTER FROM TOP OF STACK
+     1   000C:22F220             SHLD    PSAV            ;/AND SAVE IT
+     1   000F:F5                 PUSH    PSW
+     1   0010:E1                 POP     H
+     1   0011:22ED20             SHLD    FSAV            ;SAVE FLIP/FLOPS & REGISTER A
+     1   0014:210000             LXI     H,0             ;CLEAR H & L
+     1   0017:39                 DAD     SP              ;GET USER STACK POINTER
+     1   0018:22F420             SHLD    SSAV            ;/AND SAVE IT
+     1   001B:21ED20             LXI     H,BSAV+1;SET STACK POINTER FOR SAVING
+     1   001E:F9                 SPHL                    ;/REMAINING REGISTERS
+     1   001F:C5                 PUSH    B               ;SAVE B & C
+     1   0020:D5                 PUSH    D               ;SAVE D & E
+     1   0021:C33F00             JMP     RES10           ;LEAVE ROOM FOR VECTORED INTERRUPTS
+     1                   ;
+     1                   ;****** TIMER INTERRUPT(TRAP) ENTRY POINT(RST 4.5)
+     1                           ORG     24H
+     1   0024:C35701             JMP     STP25           ;BACK TO SINGLE STEP ROUTINE
+     1                   ;
+     1                   ;****** RST 5 ENTRY POINT
+     1                   ;
+     1                           ORG     28H
+     1   0028:C3C220             JMP     20C2H           ;BRANCH TO RST 5 LOCATION IN RAM
+     1                   ;
+     1                   ;****** INPUT INTERRUPT ENTRY POINT(RST 5.5)
+     1                           ORG     2CH
+     1   002C:C38E02             JMP     ININT           ;BRANCH TO INPUT INTERRUPT ROUTINE
+     1                   ;
+     1                   ;****** RST 6 ENTRY POINT
+     1                   ;
+     1                           ORG     30H
+     1   0030:C3C520             JMP     20C5H           ;BRANCH TO RST 6 LOCATION IN RAM
+     1                   ;
+     1                   ;****** HARD WIRED USER INTERRUPT ENTRY POINT(RST 6.5)
+     1                   ;
+     1                           ORG     34H
+     1   0034:C3C820             JMP     20C8H           ;BRANCH TO RST 6.5 LOCATION IN RAM
+     1                   ;
+     1                   ;****** RST 7   ENTRY POINT
+     1                   ;
+     1                           ORG     38H
+     1   0038:C3CB20             JMP     20CBH           ;BRANCH TO RST 7 LOCATION IN RAM
+     1                   ;
+     1                   ;****** "VECTORED INTERRUPT" KEY ENTRY POINT (RST 7.5)
+     1                           ORG     3CH
+     1   003C:C3CE20             JMP     20CEH           ;BRANCH TO USER INTERRUPT LOCATION IN RAM
+     1                   ;
+     1                   RES10:  ; CONTINUE SAVING USER STATUS
+     1   003F:20                 RIM                     ;GET USER INTERRUPT STATUS AND INTERRUPT MASK
+     1   0040:E60F               ANI     0FH             ;KEEP STATUS & MASK BITS
+     1   0042:32F120             STA     ISAV            ;SAVE INTERRUPT STATUS & MASK
+     1   0045:3E0E               MVI     A,UNMSK         ;UNMASK INTERRUPTS FOR MONITOR USE
+     1   0047:30                 SIM
+     1   0048:F3                 DI                      ;INTERRUPTS DISABLED WHILE MONITOR IS RUNNING
+     1                                                   ;(EXCEPT WHEN WAITING FOR INPUT)
+     1   0049:20                 RIM                     ;TTY OR KEYBOARD MONITOR?
+     1   004A:07                 RLC                     ;IS TTY CONNECTED       ?
+     1   004B:DAFA03             JC      03FAH           ;YES-BRANCH TO TTY MONITOR
+     1                                                   ;NO-ENTER KEYBOARD MONITOR
+     1                   ;
+     1                   ;***********************************************************************************************************
+     1                   ;
+     1                   ;                               BEGINNING OF KEYBOARD MONITOR CODE
+     1                   ;
+     1                   ;***********************************************************************************************************
+     1                   ;
+     1                   ;       OUTPUTSIGN-ON MESSAGE
+     1   004E:AF                 XRA     A               ;ARG -USE ADDRESS FIELD OF DISPLAY
+     1   004F:0600               MVI     B,NODOT         ;ARG -NO DOT IN ADDRESS FIELD
+     1   0051:21A603             LXI     H,SGNAD         ;ARG -GET ADDRESS OF ADDRESS FIELD PORTION OF
+     1                                                   ;/SIGN-ON MESSAGE
+     1   0054:CDB702             CALL    OUTPT           ;OUTPUT SIGN-ON MESSAGE TO ADDRESS FIELD
+     1   0057:3E01               MVI     A,DTFLD         ;ARG -USE DATA FIELD OF DISPLAY
+     1   0059:0600               MVI     B,NODOT         ;ARG -NO DOT IN DATA FIELD
+     1   005B:21AA03             LXI     H,SGNDT         ;ARG -GET ADDRESS OF DATA FIELD PORTION OF
+     1                                                   ;/SIGN-ON MESSAGE
+     1   005E:CDB702             CALL    OUTPT           ;OUTPUT SIGN-ON MESSAGE TO DATA FIELD
+     1   0061:3E80               MVI     A,EMPTY
+     1   0063:32FE20             STA     IBUFF           ;SET INPUT BUFFER EMPTY FLAG
+     1                   ;
+     1                   ;****************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: CMMND-COMMAND RECOGNIZER
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: RDKBD,ERR,SUBST,EXAM,GOCMD,SSTEP
+     1                   ;DESTROYS: A,B,C,D, E,H, L, F/F'S
+     1                   ;
+     1                   CMMND:
+     1   0066:21E920             LXI     H,MNSTK         ;INITIALIZE MONITOR STACK POINTER
+     1   0069:F9                 SPHL
+     1                                                   ;OUTPUT PROMPT CHARACTER TO DISPLAY
+     1   006A:210019             LXI     H,CNTRL         ;GET ADDRESS FOR CONTROL CHARACTER
+     1   006D:3690               MVI     M,ADISP         ;OUTPUT CONTROL CHARACTER TO USE ADDRESS FIELD
+     1   006F:25                 DCR     H               ;ADDRESS FOR OUTPUT CHARACTER
+     1   0070:36FB               MVI     M,PRMPT         ;OUTPUT PROMPT CHARACTER
+     1   0072:CDE702             CALL    RDKBD           ;READ KEYBOARD
+     1   0075:010400             LXI     B,NUMC          ;COUNTER FOR NUMBER OF COMMANDS IN C
+     1   0078:217803             LXI     H,CMDTB         ;GET ADDRESS OF COMMAND TABLE
+     1                   CMD10:
+     1   007B:BE                 CMP     M               ;RECOGNIZE THE COMMAND?
+     1   007C:CA8700             JZ      CMD15           ;YES-GO PROCESS IT
+     1   007F:23                 INX     H               ;NO-NEXT COMMAND TABLE ENTRY
+     1   0080:0D                 DCR     C               ;END OF TABLE?
+     1   0081:C27B00             JNZ     CMD10           ;NO-GO CHECK NEXT ENTRY
+     1                                                   ;YES-COMMAND UNKNOWN
+     1   0084:C31502             JMP     ERR             ;DISPLAY ERROR MESSAGE AND GET ANOTHER COMMAND
+     1                   CMD15:
+     1   0087:217C03             LXI     H,CMDAD         ;GET ADDRESS OF COMMAND ADDRESS TABLE
+     1   008A:0D                 DCR     C               ; ADJUST COMMAND COUNTER
+     1                                                   ;COUNTER ACTS AS POINTER TO COMMAND ADDRESS TABLE
+     1   008B:09                 DAD     B               ;ADD POINTER TO TABLE ADDRESS TWICE BECAUSE
+     1   008C:09                 DAD     B               ;TABLE HAS 2 BYTE ENTRIES
+     1   008D:7E                 MOV     A,M             ;GET LOW ORDER BYTE OF COMMAND ADDRESS
+     1   008E:23                 INX     H
+     1   008F:66                 MOV     H,M             ;GET HIGH ORDER BYTE OF COMMAND ADDRESS IN H
+     1   0090:6F                 MOV     L,A             ;PUT LOW ORDER BYTE IN L
+     1                                   ;COMMAND ROUTINE ADDRESS IS NOW IN H & L
+     1   0091:E9                 PCHL                    ;BRANCH TO ADDRESS IN H & L
+     1                   ;
+     1                   ;**************************************************************************************************
+     1                   ;
+     1                   ;                                       COMMAND ROUTINES
+     1                   ;
+     1                   ;**************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: EXAM - EXAMINE AND MODIFY REGISTERS
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: CLEAR,SETRG,ERR,RGNAM,RGLOC,UPDDT,GTHEX,NXTRG
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;
+     1                   EXAM:
+     1   0092:0601               MVI     B,DOT           ;ARG - DOT IN ADDRESS FIELD OF DISPLAY
+     1   0094:CDD701             CALL    CLEAR           ;CLEAR DISPLAY
+     1   0097:CD4403             CALL    SETRG           ;GET REGISTER DESIGNATOR FROM KEYBOARD AND
+     1                                                   ;/SET REGISTER POINTER ACCORDINGLY
+     1                                                   ;WAS CHARACTER A REGISTER DESIGNATOR?
+     1                   ;       FALSE   ERR             ;NO - DISPLAY ERROR MSG. AND TERMINATE COMMAND
+     1   009A:D21502             JNC     ERR
+     1                   EXM05:
+     1   009D:CD0903             CALL    RGNAM           ;OUTPUT REGISTER NAME TO ADDRESS FIELD
+     1   00A0:CDFC02             CALL    RGLOC           ;GET REGISTER SAVE LOCATION IN H & L
+     1   00A3:7E                 MOV     A,M             ;GET REGISTER CONTENTS
+     1   00A4:32F820             STA     CURDT           ;STORE REGISTER CONTENTS AT CURRENT DATA
+     1   00A7:0601               MVI     B,DOT           ;ARG - DOT IN DATA FIELD
+     1   00A9:CD6B03             CALL    UPDDT           ;UPDATE DATA FIELD OF DISPLAY
+     1   00AC:0601               MVI     B,DTFLD         ;ARG - USE DATA FIELD OF DISPLAY
+     1   00AE:CD2B02             CALL    GTHEX           ;GET HEX DIGITS - WERE ANY DIGITS RECEIVED?
+     1                   ;       FALSE   EXM10           ;NO-DO NOT UPDATE REGISTER CONTENTS
+     1   00B1:D2B800             JNC     EXM10
+     1   00B4:CDFC02             CALL    RGLOC           ;YES-GET REGISTER SAVE LOCATION IN H & L
+     1   00B7:73                 MOV     M,E             ;UPDATE REGISTER CONTENTS
+     1                   EXM10:
+     1   00B8:FE10               CPI     PERIO           ;WAS LAST CHARACTER A PERIOD ?
+     1   00BA:CAE901             JZ      CLDIS           ;YES-CLEAR DISPLAY AND TERMINATE COMMAND
+     1   00BD:FE11               CPI     COMMA           ;WAS LAST CHARACTER ',' ?
+     1   00BF:C21502             JNZ     ERR             ;NO-DISPLAY ERROR MSG. AND TERMINATE COMMAND
+     1   00C2:CDA802             CALL    NXTRG           ;YES-ADVANCE REGISTER POINTER TO
+     1                                                   ;/NEXT REGISTER
+     1                                                   ;ANY MORE REGISTERS ?
+     1                   ;       TRUE    EXM05           ;YES-CONTINUE PROCESSING WITH NEXT REGISTER
+     1   00C5:DA9D00             JC      EXM05
+     1   00C8:C3E901             JMP     CLDIS           ;NO-CLEAR DISPLAY AND TERMINATE COMMAND
+     1                   ;
+     1                   ;**********************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: GOCMD - EXECUTE USER PROGRAM
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: DISPC,RDKBD,CLEAR,GTHEX,ERR,OUTPT
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;
+     1                   GOCMD:
+     1   00CB:CD0002             CALL    DISPC           ;DISPLAY USER PROGRAM COUNTER
+     1   00CE:CDE702             CALL    RDKBD           ;READ FROM KEYBOARD
+     1   00D1:FE10               CPI     PERIO           ;IS CHARACTER A PERIOD  ?
+     1   00D3:CAEC00             JZ      G10             ;YES-GO EXECUTE THE COMMAND
+     1                                                   ;NO-ARG-CHARACTER IS STILL IN A
+     1   00D6:32FE20             STA     IBUFF           ;REPLACE CHARACTER IN INPUT BUFFER
+     1   00D9:0601               MVI     B,DOT           ;ARG-DOT IN ADDRESS FIELD
+     1   00DB:CDD701             CALL    CLEAR           ;CLEAR DISPLAY
+     1   00DE:0600               MVI     B,ADFLD         ;ARG-USE ADDRESS FIELD
+     1   00E0:CD2B02             CALL    GTHEX           ;GET HEX DIGITS
+     1   00E3:FE10               CPI     PERIO           ;WAS LAST CHARACTER A PERIOD?
+     1   00E5:C21502             JNZ     ERR             ;NO- DISPLAY ERROR MSG. AND TERMINATE COMMAND
+     1   00E8:EB                 XCHG                    ;PUT HEX VALUE FROM GTHEX TO H & L
+     1   00E9:22F220             SHLD    PSAV            ;HEXVALUE IS NEW USER PC
+     1                   G10:
+     1   00EC:0600               MVI     B,NODOT         ;YES-ARG - NO DOT IN ADDRESS FIELD
+     1   00EE:CDD701             CALL    CLEAR           ;CLEAR DISPLAY
+     1   00F1:AF                 XRA     A               ;ARG- USE ADDRESS FIELD OF DISPLAY
+     1   00F2:0600               MVI     B,NODOT         ;ARG- NO DOT IN ADDRESS FIELD
+     1   00F4:21A203             LXI     H,EXMSG         ;GET ADDRESS OF EXECUTION MESSAGE IN H & L
+     1   00F7:CDB702             CALL    OUTPT           ;DISPLAY EXECUTION MESSAGE
+     1   00FA:C31B03             JMP     RSTOR           ;RESTORE USER REGISTERS INCL. PROGRAM COUNTER
+     1                                                   ;/I.E. BEGIN EXECUTION OF USER PROGRAM
+     1                   ;
+     1                   ;************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: SSTEP - SINGLE STEP  (EXECUTE ONE USER INSTRUCTION)
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: DISPC,RDKBD,CLEAR,GTHEX,ERR
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;
+     1                   SSTEP:
+     1   00FD:CD0002             CALL    DISPC           ;DISPLAY USER PROGRAM COUNTER
+     1   0100:CDE702             CALL    RDKBD           ;READ FROM KEYBOARD
+     1   0103:FE10               CPI     PERIO           ;WAS CHARACTER A PERIOD ?
+     1   0105:CAE901             JZ      CLDIS           ;YES-CLEAR DISPLAY AND TERMINATE COMMAND
+     1   0108:FE11               CPI     COMMA           ;WAS LAST CHARACTER ',' ?
+     1   010A:CA2601             JZ      STP20           ;YES-GO SET TIMER
+     1                           ; NO-CHARACTERFROM KEYBOARD WAS NEITHER PERIOD NOR COMMA
+     1   010D:32FE20             STA     IBUFF           ;REPLACE THE CHARACTER IN THE INPUT BUFFER
+     1   0110:0601               MVI     B,DOT           ;ARG-DOT IN ADDRESS FIELD
+     1   0112:CDD701             CALL    CLEAR           ;CLEAR DISPLAY
+     1   0115:0600               MVI     B,ADFLD         ;ARG-USE ADDRESS FIELD OF DISPLAY
+     1   0117:CD2B02             CALL    GTHEX           ;GET HEX DIGITS-WERE ANY DIGITS RECEIVED?
+     1                   ;       FALSE   ERR             ;NO-DISPLAY ERROR MSG. AND TERMINATE COMMAND
+     1   011A:D21502             JNC     ERR
+     1   011D:EB                 XCHG                    ;HEX VALUE FROM GTHEX TO H & L
+     1   011E:22F220             SHLD    PSAV            ;HEX VALUE IS NEW USER PC
+     1   0121:FE10               CPI     PERIO           ;WAS LAST CHARACTER FROM GTHEX A PERIOD ?
+     1   0123:CAE901             JZ      CLDIS           ;YES-CLEAR DISPLAY AND TERMINATE COMMAND
+     1                                                   ;NO-MUST HAVE BEEN A COMMA
+     1                   STP20:
+     1   0126:3AF120             LDA     ISAV            ;GET USER INTERRUPT MASK
+     1   0129:E608               ANI     08H             ;KEEP INTERRUPT STATUS
+     1   012B:32FD20             STA     TEMP            ;SAVE USER INTERRUPT STATUS
+     1   012E:2AF220             LHLD    PSAV            ;GET USER PC
+     1   0131:7E                 MOV     A,M             ;GET USER INSTRUCTION
+     1   0132:FEF3               CPI     0F3H            ;DI INSTRUCTION ?
+     1   0134:C23B01             JNZ     STP21           ;NO
+     1   0137:AF                 XRA     A               ;YES-RESET USER INTERRUPT STATUS
+     1   0138:C34201             JMP     STP22
+     1                   STP21:
+     1   013B:FEFB               CPI     0FBH            ;EI INSTRUCTION ?
+     1   013D:C24501             JNZ     STP23           ;NO
+     1   0140:3E08               MVI     A,08H           ;YES-SET USER INTERRUPT STATUS
+     1                   STP22:
+     1   0142:32FD20             STA     TEMP            ;SAVE NEW USER INTERRUPT STATUS
+     1                   STP23:
+     1   0145:3E40               MVI     A,040H  ;(TIMER SHR 8) OR TMODE ;HIGH ORDER BITS OF TIMER VALUE
+     1                                                            ;/OR'ED WITH TIMER MODE
+     1   0147:D325               OUT     TIMHI
+     1   0149:3EC5               MVI     A,0C5H  ;TIMER AND OFFH ; LOW ORDER BITS OF TIMER VALUE
+     1   014B:D324               OUT     TIMLO
+     1   014D:3AFF20             LDA     USCSR           ;GET USER IMAGE OF WHAT'S IN CSR
+     1   0150:F6C0               ORI     TSTRT           ;SET TIMER COMMAND BITS TO START TIMER
+     1   0152:D320               OUT     CSR             ;START TIMER
+     1   0154:C31B03             JMP     RSTOR           ;RESTORE USER REGISTERS
+     1                   ;
+     1                   STP25:                          ;BRANCH HERE WHEN TIMER INTERRUPTS AFTER
+     1                                                   ;/ONE USER INSTRUCTION
+     1   0157:F5                 PUSH    PSW             ;SAVE PSW
+     1   0158:3AFF20             LDA     USCSR           ;GET USER IMAGE OF WHAT'S IN CSR
+     1   015B:E63F               ANI     3FH             ;CLEAR 2 HIGH ORDER BITS
+     1   015D:F640               ORI     40H             ;SET TIMER STOP BIT
+     1   015F:D320               OUT     CSR             ;STOP TIMER
+     1   0161:F1                 POP     PSW             ;RETRIEVE PSW
+     1   0162:22EF20             SHLD    LSAV            ;SAVE H & L
+     1   0165:E1                 POP     H               ;GET USER PROGRAM COUNTER FROM TOP OF STACK
+     1   0166:22F220             SHLD    PSAV            ;SAVE USER PC
+     1   0169:F5                 PUSH    PSW
+     1   016A:E1                 POP     H
+     1   016B:22ED20             SHLD    FSAV            ;SAVE FLIP/FLOPS AND A REGISTER
+     1   016E:210000             LXI     H,0             ;CLEAR H & L
+     1   0171:39                 DAD     SP              ;GET USER STACK POINTER
+     1   0172:22F420             SHLD    SSAV            ;SAVE USER STACK POINTER
+     1   0175:21ED20             LXI     H,BSAV+1;SET MONITOR STACK POINTER FOR
+     1   0178:F9                 SPHL                    ;/SAVING REMAINING USER REGISTERS
+     1   0179:C5                 PUSH    B               ;SAVE B & C
+     1   017A:D5                 PUSH    D               ;SAVE D & E
+     1   017B:20                 RIM                     ;GET USER INTERRUPT MASK
+     1   017C:E607               ANI     07H             ;KEEP MASK BITS
+     1   017E:21FD20             LXI     H,TEMP          ;GET USER INTERRUPT STATUS
+     1   0181:B6                 ORA     M               ;OR IT INTO MASK
+     1   0182:32F120             STA     ISAV            ;SAVE INTERRUPT STATUS & MASK
+     1   0185:3E0E               MVI     A,UNMSK         ;UNMASK INTERRUPTS FOR MONITOR USE
+     1   0187:30                 db      030h
+     1                   ;       SIM
+     1   0188:C3FD00             JMP     SSTEP           ;GO GET READY FOR ANOTHER INSTRUCTION
+     1                   ;
+     1                   ;**********************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: SUBST - SUBSTITUTE MEMORY
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: CLEAR, GTHEX,UPDAD, UPDDT,ERR
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;
+     1                   SUBST:
+     1   018B:0601               MVI     B,DOT           ;ARG-DOT IN ADDRESS FIELD
+     1   018D:CDD701             CALL    CLEAR           ;CLEAR THE DISPLAY
+     1   0190:0600               MVI     B,ADFLD         ;ARG-USE ADDRESS FIELD OF DISPLAY
+     1   0192:CD2B02             CALL    GTHEX           ;GET HEX DIGITS - WERE ANY DIGITS RECEIVED?
+     1                   ;       FALSE   ERR             ;NO-DISPLAY ERROR MSG. AND TERMINATE COMMAND
+     1   0195:D21502             JNC     ERR
+     1   0198:EB                 XCHG                    ;ASSIGN HEX VALUE RETURNED BY GTHEX TO
+     1   0199:22F620             SHLD    CURAD           ;/CURRENT ADDRESS
+     1                   SUB05:
+     1   019C:FE11               CPI     COMMA           ;WAS ',' THE LAST CHARACTER FROM KEYBOARD?
+     1   019E:C2CF01             JNZ     SUB15           ;NO-GO TERMINATE THE COMMAND
+     1   01A1:0600               MVI     B,NODOT         ;ARG- NO DOT IN ADDRESS FIELD
+     1   01A3:CD5F03             CALL    UPDAD           ;UPDATE ADDRESS FIELD OF DISPLAY
+     1   01A6:2AF620             LHLD    CURAD           ;GET CURRENT ADDRESS IN H & L
+     1   01A9:7E                 MOV     A,M             ;GET DATA BYTE POINTED TO BY CURRENT ADDRESS
+     1   01AA:32F820             STA     CURDT           ;STORE DATA BYTE AT CURRENT DATA
+     1   01AD:0601               MVI     B,DOT           ;ARG-DOT IN DATA FIELD
+     1   01AF:CD6B03             CALL    UPDDT           ;UPDATE DATA FIELD OF DISPLAY
+     1   01B2:0601               MVI     B,DTFLD         ;ARG-USE DATA FIELD
+     1   01B4:CD2B02             CALL    GTHEX           ;GET HEX DIGITS - WERE ANY HEX DIGITS RECEIVED?
+     1   01B7:F5                 PUSH    PSW             ;(SAVE LAST CHARACTER)
+     1                   ;       FALSE   SUB10           ;NO-LEAVE DATA UNCHANGED AT CURRENT ADDRESS
+     1   01B8:D2C401             JNC     SUB10
+     1   01BB:2AF620             LHLD    CURAD           ;YES-GET CURRENT ADDRESS IN H & L
+     1   01BE:73                 MOV     M,E             ;STORE NEW DATA AT CURRENT ADDRESS
+     1                                   ;MAKE SURE DATA WAS ACTUALLY STORED IN CASE
+     1                                   ;/CURRENT ADDRESS IS IN ROM OR IS NON-EXISTANI
+     1   01BF:7B                 MOV     A,E             ;DATA TO A FOR COMPARISON
+     1   01C0:BE                 CMP     M               ;WAS DATA STORED CORRECTLY?
+     1   01C1:C21502             JNZ     ERR             ;NO - DISPLAY ERROR MSG. AND TERMINATE COMMAND
+     1                   SUB10:
+     1   01C4:2AF620             LHLD    CURAD           ;INCREMENT CURRENT ADDRESS
+     1   01C7:23                 INX     H
+     1   01C8:22F620             SHLD    CURAD
+     1   01CB:F1                 POP     PSW             ;RETRIEVE LAST CHARACTER
+     1   01CC:C39C01             JMP     SUB05
+     1                   SUB15:
+     1   01CF:FE10               CPI     PERIO           ;WAS LAST CHARACTER '.' ?
+     1   01D1:C21502             JNZ     ERR             ;NO-DISPLAY ERROR MSG. AND TERMINATE COMMAND
+     1   01D4:C3E901             JMP     CLDIS           ;YES-CLEAR DISPLAY AND TERMINATE COMMAND
+     1                   ;
+     1                   ;
+     1                   ;*****************************************************************************************************************
+     1                   ;
+     1                   ;                                       UTILITY ROUTINES
+     1                   ;
+     1                   ;*****************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: CLEAR - CLEAR THE DISPLAY
+     1                   ;INPUTS: B      - DOT FLAG -    1 MEANS PUT DOT IN ADDRESS FIELD OF DISPLAY
+     1                   ;                          -    0 MEANS NO DOT
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: OUTPT
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   CLEAR SENDS BLANK CHARACTERS TO BOTH THE ADDRESS FIELD
+     1                   ;               AND THE DATA FIELD OF THE DISPLAY. IF THE DOT FLAG IS
+     1                   ;               SET THEN A DOT WILL APPEAR AT THE RIGHT EDGE OF THE
+     1                   ;               ADDRESS FIELD.
+     1                   ;
+     1                   CLEAR:
+     1   01D7:AF                 XRA     A               ;ARG - USE ADDRESS FIELD OF DISPLAY
+     1                                                   ;ARG - FLAG FOR DOT IN ADDR. FIELD IS IN B
+     1   01D8:219A03             LXI     H,BLNKS         ;ARG - ADDRESS OF BLANKS FOR DISPLAY
+     1   01DB:CDB702             CALL    OUTPT           ;OUTPUT BLANKS TO ADDRESS FIELD
+     1   01DE:3E01               MVI     A,DTFLD ;ARG - USE DATA FIELD OF DISPLAY
+     1   01E0:0600               MVI     B,NODOT ;ARG - NO DOT IN DATA FIELD
+     1   01E2:219A03             LXI     H,BLNKS         ;ARG - ADDRESS OF BLANKS FOR DISPLAY
+     1   01E5:CDB702             CALL    OUTPT           ;OUTPUT BLANKS TO DATA FIELD
+     1   01E8:C9                 RET                     ;RETURN
+     1                   ;
+     1                   ;************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: CLDIS - CLEAR DISPLAY AND TERMINATE COMMAND
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: CLEAR
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   CLDIS IS JUMPED TO BY COMMAND ROUTINES WISHING TO
+     1                   ;               TERMINATE NORMALLY. CLDIS CLEARS THE DISPLAY AND
+     1                   ;               BRANCHES TO THE COMMAND RECOGNIZER.
+     1                   ;
+     1                   CLDIS:
+     1   01E9:0600               MVI     B,NODOT ;ARG - NO DOT IN ADDRESS FIELD
+     1   01EB:CDD701             CALL    CLEAR           ;CLEAR THE DISPLAY
+     1   01EE:C36600             JMP     CMMND           ;GO GET ANOTHER COMMAND
+     1                   ;
+     1                   ;*************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: CLDST - COLD START
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: A
+     1                   ;DESCRIPTION:   CLDST IS JUMPED TO BY THE MAIN COLD START PROCEDURE,
+     1                   ;               COMPLETES COLD START INITIALIZATION, AID JUMPS BACK
+     1                   ;               TO THE MAIN COLD START PROCEDURE.
+     1                   ;
+     1                   CLDST:
+     1   01F1:3ECC               MVI     A,KBNIT         ;GET CONTROL CHARACTER
+     1   01F3:320019             STA     CNTRL           ;INITIALIZE KEYBOARD/DISPLAY BLANKING
+     1   01F6:3E00               MVI     A,CSNIT         ;INITIAL VALUE OF COMMAND STATUS REGISTER
+     1   01F8:D320               OUT     CSR             ;INITIALIZE CSR
+     1   01FA:32FF20             STA     USCSR           ;INITIALIZE USER CSR VALUE
+     1   01FD:C30800             JMP     CLDBK           ;BACK TO MAIN PROCEDURE
+     1                   ;
+     1                   ;*******************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: DISPC - DISPLAY PROGRAM COUNTER
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: UPDAD,UPDDT
+     1                   ; DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   DISPC DISPLAYS THE USER PROGRAM COUNTER IN THE ADDRESS
+     1                   ;               FIELD OF THE DISPLAY, WITH A DOT AT THE RIGHT EDGE
+     1                   ;               OF THE FIELD. THE BYTE OF DATA ADDRESSED BY THE PROGRAM
+     1                   ;               COUNTER IS DISPLAYED IN THE DATA FIELD OF THE DISPLAY.
+     1                   ;
+     1                   DISPC:
+     1   0200:2AF220             LHLD    PSAV            ;GETUSER PROGRAM COUNTER
+     1   0203:22F620             SHLD    CURAD           ;MAKEIT THE CURRENT ADDRESS
+     1   0206:7E                 MOV     A,M             ;GETTHE INSTRUCTION AT THAT ADDRESS
+     1   0207:32F820             STA     CURDT           ;MAKEIT THE CURRENT DATA
+     1   020A:0601               MVI     B,DOT           ;ARG- DOT IN ADDRESS FIELD
+     1   020C:CD5F03             CALL    UPDAD           ;UPDATE ADDRESS FIELD OF DISPLAY
+     1   020F:0600               MVI     B,NODOT         ;ARG - NO DOT IN DATA FIELD
+     1   0211:CD6B03             CALL    UPDDT           ;UPDATE DATA FIELD OF DISPLAY
+     1   0214:C9                 RET
+     1                   ;
+     1                   ;****************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: ERR - DISPLAY ERROR MESSAGE
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: OUTPT
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   ERR IS JUMPED TO BY COMMAND ROUTINES WISHING TO
+     1                   ;               TERMINATE BECAUSE OF AN ERROR.
+     1                   ;               ERR OUTPUTS AN ERROR MESSAGE TO THE DISPLAY AND
+     1                   ;               BRANCHES TO THE COMMAND RECOGNIZER.
+     1                   ERR:
+     1   0215:AF                 XRA     A               ;ARG - USE ADDRESS FIELD
+     1   0216:0600               MVI     B,NODOT         ;ARG - NO DOT IN ADDRESS FIELD
+     1   0218:219E03             LXI     H,ERMSG         ;ARG - ADDRESS OF ERROR MESSAGE
+     1   021B:CDB702             CALL    OUTPT           ;OUTPUT ERROR MESSAGE TO ADDRESS FIELD
+     1   021E:3E01               MVI     A,DTFLD         ;ARG - USE DATA FIELD
+     1   0220:0600               MVI     B,NODOT         ;ARG - NO DOT IN DATA FIELD
+     1   0222:219A03             LXI     H,BLNKS         ;ARG - ADDRESS OF BLANKS FOR DISPLAY
+     1   0225:CDB702             CALL    OUTPT           ;OUTPUT BLANKS TO DATA FIELD
+     1   0228:C36600             JMP     CMMND           ;GO GET A NEW COMMAND
+     1                   ;
+     1                   ;*****************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: GTHEX - GET HEX DIGITS
+     1                   ;INPUTS: B- DISPLAY FLAG - 0 MEANS USE ADDRESS FIELD OF DISPLAY
+     1                   ;                       - 1 MEANS USE DATA FIELD OF DISPLAY
+     1                   ;OUTPUTS: A  - LAST CHARACTER READ FROM KEYBOARD
+     1                   ;         DE - HEX DIGITS FROM KEYBOARD EVALUATED MODULO  2**16
+     1                   ;         CARRY - SET IF AT LEAST ONE VALID HEX DIGIT WAS READ
+     1                   ;               - RESET OTHERWISE
+     1                   ;CALLS: RDKBD,INSDG,HXDSP,OUTPT
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   GTHEX ACCEPTS A STRING OF HEX DIGITS FROM THE KEYBOARD,
+     1                   ;               DISPLAYS THEM AS THEY ARE RECEIVED, AND RETURNS THEIR
+     1                   ;               VALUE AS A 16   BIT INTEGER. IF MORE THAN 4 HEX DIGITS
+     1                   ;               ARE RECEIVED, ONLY THE LAST 4 ARE USED. IF THE DISPLAY
+     1                   ;               FLAG IS SET, THE LAST 2 HEX DIGITS ARE DISPLAYED IN THE
+     1                   ;               DATA FIELD OF THE DISPLAY. OTHERWISE, THE LAST   4 HEX
+     1                   ;               DIGITS ARE DISPLAYED IN THE ADDRESS FIELD OF THE
+     1                   ;               DISPLAY. IN EITHER CASE, A DOT WILL BE DISPLAYED AT THE
+     1                   ;               RIGHTMOST EDGE OF THE FIELD. A CHARACTER WHICH IS NOT
+     1                   ;               A HEX DIGIT TERMINATES THE STRING AND IS RETURNED AS
+     1                   ;               AN OUTPUT OF THE FUNCTION. IF THE TERMINATOR IS NOT
+     1                   ;               A PERIOD OR A COMMA THEN ANY HEX DIGITS WHICH MAY HAVE
+     1                   ;               BEEN RECEIVED ARE CONSIDERED TO BE INVALID. THE
+     1                   ;               FUNCTION RETURNS A FLAG INDICATING WHETHER OR NOT ANY
+     1                   ;               VALID HEX DIGITS WERE RECEIVED.
+     1                   GTHEX:
+     1   022B:0E00               MVI     C,0             ;RESET HEX DIGIT FLAG
+     1   022D:C5                 PUSH    B               ;SAVE DISPLAY AND HEX DIGIT FLAGS
+     1   022E:110000             LXI     D,0             ;SET HEX VALUE TO ZERO
+     1   0231:D5                 PUSH    D               ;SAVE HEX VALUE
+     1                   GTH05:
+     1   0232:CDE702             CALL    RDKBD           ;READ KEYBOARD
+     1   0235:FE10               CPI     10H             ;IS CHARACTER A HEX DIGIT?
+     1   0237:D25502             JNC     GTH20           ;NO-GO CHECK FOR TERMINATOR
+     1                                                   ;YES- ARG - NEW HEX DIGIT IS IN A
+     1   023A:D1                 POP     D               ;ARG - RETRIEVE HEX VALUE
+     1   023B:CD9F02             CALL    INSDG           ;INSERT NEW DIGIT IN HEX VALUE
+     1   023E:C1                 POP     B               ;RETRIEVE DISPLAY FLAG
+     1   023F:0E01               MVI     C,1             ; SET HEX DIGIT FLAG
+     1                                                   ;/(I.E. A HEX DIGIT HAS BEEN READ)
+     1   0241:C5                 PUSH    B               ;SAVE DISPLAY AND HEX DIGIT FLAGS
+     1   0242:D5                 PUSH    D               ;SAVE HEX VALUE
+     1   0243:78                 MOV     A,B             ;TEST DISPLAY FLAG
+     1   0244:0F                 RRC                     ;SHOULD ADDRESS FIELD OF DISPLAY BE USED?
+     1   0245:D24902             JNC     GTH10           ;YES- USE HEX VALUE AS IS
+     1                                                   ;NO- ONLY LOW ORDER BYTE OF HEX VALUE SHOULD
+     1                                                   ;/BE USED FOR DATA FIELD OF DISPLAY
+     1   0248:53                 MOV     D,E             ;PUT LOW ORDER BYTE OF HEX VALUE IN D
+     1                   GTH10:
+     1                                                   ;ARG - HEX VALUE TO BE EXPANDED IS IN D & E
+     1   0249:CD6C02             CALL    HXDSP           ;EXPAND HEX VALUE FOR DISPLAY
+     1                                                   ;ARG - ADDRESS OF EXPANDED HEX VALUE IN H & L
+     1   024C:78                 MOV     A,B             ;ARG - PUT DISPLAY FLAG IN A
+     1   024D:0601               MVI     B,DOT           ;ARG - DOT IN APPROPRIATE FIELD
+     1   024F:CDB702             CALL    OUTPT           ;OUTPUT HEX VALUE TO DISPLAY
+     1   0252:C33202             JMP     GTH05           ;GO GET NEXT CHARACTER
+     1                   GTH20:                          ;LAST CHARACTER WAS NOT A HEX DIGIT
+     1   0255:D1                 POP     D               ;RETRIEVE HEX VALUE
+     1   0256:C1                 POP     B               ;RETRIEVE HEX DIGIT FLAG IN C
+     1   0257:FE11               CPI     COMMA           ;WAS LAST CHARACTER ' '?
+     1   0259:CA6702             JZ      GTH25           ;YES    - READY TO RETURN
+     1   025C:FE10               CPI     PERIO           ;NO - WAS LAST CHARACTER '.'?
+     1   025E:CA6702             JZ      GTH25           ;YES - READY TO RETURN
+     1                                                   ; NO - INVALID TERMINATOR - IGNORE ANY HEX DIGITS READ
+     1   0261:110000             LXI     D,0             ;SET HEX VALUE TO ZERO
+     1   0264:C3F702             JMP     RETF            ;RETURN FALSE
+     1                   GTH25:
+     1   0267:47                 MOV     B,A             ;SAVE LAST CHARACTER
+     1   0268:79                 MOV     A,C             ;SHIFT HEX DIGIT FLAG TO
+     1   0269:0F                 RRC                     ;/CARRY BIT
+     1   026A:78                 MOV     A,B             ;RESTORE LAST CHARACTER
+     1   026B:C9                 RET                     ;RETURN
+     1                   ;
+     1                   ;*****************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: HXDSP - EXPAND HEX DIGITS FOR DISPLAY
+     1                   ;INPUTS: DE -4  HEX DIGITS
+     1                   ;OUTPUTS: HL - ADDRESS OF OUTPUT BUFFER
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: A,H,L,F/F'S
+     1                   ;DESCRIPTION:   HXDSP EXPANDS EACH INPUT BYTE TO 2 BYTES IN A FORM
+     1                   ;               SUITABLE FOR DISPLAY BY THE OUTPUT ROUTINES. EACH INPUT
+     1                   ;               BYTE IS DIVIDED INTO 2 HEX DIGITS. EACH HEX DIGIT IS
+     1                   ;               PLACED IN THE LOW ORDER 4 BITS OF A BYTE WHOSE HIGH
+     1                   ;               ORDER 4 BITS ARE SET TO ZERO. THE RESULTING BYTE IS
+     1                   ;               STORED IN THE OUTPUT BUFFER. THE FUNCTION RETURNS THE
+     1                   ;               ADDRESS OF THE OUTPUT BUFFER.
+     1                   ;
+     1                   HXDSP:
+     1   026C:7A                 MOV     A,D             ;GET FIRST DATA BYTE
+     1   026D:0F                 RRC                     ;CONVERT 4 HIGH ORDER BITS
+     1   026E:0F                 RRC                     ;/TO A SINGLE CHARACTER
+     1   026F:0F                 RRC
+     1   0270:0F                 RRC
+     1   0271:E60F               ANI     0FH
+     1   0273:21F920             LXI     H,OBUFF         ; GET ADDRESS OF OUTPUT BUFFER
+     1   0276:77                 MOV     M,A             ;STORE CHARACTER IN OUTPUT BUFFER
+     1   0277:7A                 MOV     A,D             ;GET FIRST DATA BYTE AND CONVERT 4 LOW ORDER
+     1   0278:E60F               ANI     0FH             ;/BITS TO A SINGLE CHARACTER
+     1   027A:23                 INX     H               ;NEXT BUFFER POSITION
+     1   027B:77                 MOV     M,A             ;STORE CHARACTER IN BUFFER
+     1   027C:7B                 MOV     A,E             ;GET SECOND DATA BYTE
+     1   027D:0F                 RRC                     ;CONVERT 4 HIGH ORDER BITS
+     1   027E:0F                 RRC                     ;/TO A SINGLE CHARACTER
+     1   027F:0F                 RRC
+     1   0280:0F                 RRC
+     1   0281:E60F               ANI     0FH
+     1   0283:23                 INX     H               ;NEXT BUFFER POSITION
+     1   0284:77                 MOV     M,A             ;STORE CHARACTER IN BUFFER
+     1   0285:7B                 MOV     A,E             ;GET SECOND DATA BYTE AND CONVERT LOW ORDER
+     1   0286:E60F               ANI     0FH             ;/4 BITS TO A SINGLE CHARACTER
+     1   0288:23                 INX     H               ;NEXT BUFFER POSITION
+     1   0289:77                 MOV     M,A             ;STORE CHARACTER IN BUFFER
+     1   028A:21F920             LXI     H,OBUFF         ;RETURN ADDRESS OF OUTPUT BUFFER IN H & L
+     1   028D:C9                 RET
+     1                   ;
+     1                   ;********************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: ININT- INPUT INTERRUPT PROCESSING
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: NOTHING
+     1                   ;DESCRIPTION:   ININT IS ENTERED BY MEANS OF AN INTERRUPT VECTOR(IV2C)
+     1                   ;               WHEN THE READ KEYBOARD ROUTINE IS WAITING FOR A
+     1                   ;               CHARACTER AND THE USER HAS PRESSED A KEY ON THE
+     1                   ;               KEYBOARD(EXCEPT "RESET" OR "VECTORED INTERRUPT").
+     1                   ;               ININT STORES THE INPUT CHARACTER IN THE INPUT BUFFER AND
+     1                   ;               RETURNS CONTROL TO THE READ KEYBOARD ROUTINE.
+     1                   ;
+     1                   ININT:
+     1   028E:E5                 PUSH    H               ;SAVE H & L
+     1   028F:F5                 PUSH    PSW             ;SAVE F/F'S & REGISTER A
+     1   0290:210019             LXI     H,CNTRL         ;ADDRESS FOR CONTROL CHARACTER OUTPUT
+     1   0293:3640               MVI     M,READ          ;OUTPUT CONTROL CHARACTER FOR READING
+     1                                                   ;/FROM KEYBOARD
+     1   0295:25                 DCR     H               ;ADDRESS FOR CHARACTER INPUT
+     1   0296:7E                 MOV     A,M             ;READ A CHARACTER
+     1   0297:E63F               ANI     3FH             ;ZERO 2 HIGH ORDER BITS
+     1   0299:32FE20             STA     IBUFF           ;STORE CHARACTER IN INPUT BUFFER
+     1   029C:F1                 POP     PSW             ;RESTORE F/F'S & REGISTER A
+     1   029D:E1                 POP     H               ;RESTORE H & L
+     1   029E:C9                 RET
+     1                   ;
+     1                   ;**************************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: INSDG - INSERT HEX DIGIT
+     1                   ;INPUTS: A HEX DIGIT TO BE INSERTED
+     1                   ;        DE - HEX VALUE
+     1                   ;OUTPUTS: DE - HEX VALUE WITH DIGIT INSERTED
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: A,F/F'S
+     1                   ;DESCRIPTION:   INSDG SHIFTS THE CONTENTS OF D & E LEFT 4 BITS
+     1                   ;               (1 HEX DIGIT) AND INSERTS THE HEX DIGIT IN A IN THE LOW
+     1                   ;               ORDER DIGIT POSITION OF THE RESULT. A IS ASSUMED TO
+     1                   ;               CONTAIN A SINGLE HEX DIGIT IN THE LOW ORDER 4 BITS AND
+     1                   ;               ZEROS IN THE HIGH ORDER 4 BITS.
+     1                   ;
+     1                   INSDG:
+     1   029F:EB                 XCHG                    ;PUT D & E IN H & L
+     1   02A0:29                 DAD     H               ;SHIFT H & L LEFT 4 BITS
+     1   02A1:29                 DAD     H
+     1   02A2:29                 DAD     H
+     1   02A3:29                 DAD     H
+     1   02A4:85                 ADD     L               ;INSERT LOW ORDER DIGIT
+     1   02A5:6F                 MOV     L,A
+     1   02A6:EB                 XCHG                    ;PUT H & L BACK IN D & E
+     1   02A7:C9                 RET
+     1                   ;
+     1                   ;******************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: NXTRG - ADVANCE REGISTER POINTER TO NEXT REGISTER
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: CARRY - 1 IF POINTER IS ADVANCED SUCCESSFULLY
+     1                   ;                 0 OTHERWISE
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: A,F/F'S
+     1                   ;DESCRIPTION:   IF THE REGISTER POINTER POINTS TO THE LAST REGISTER IN
+     1                   ;               THE EXAMINE REGISTER SEQUENCE, THE POINTER IS NOT
+     1                   ;               CHANGED AND THE FUNCTION RETURNS FALSE. IF THE REGISTER
+     1                   ;               POINTER DOES NOT POINT TO THE LAST REGISTER THEN THE
+     1                   ;               POINTER IS ADVANCED TO THE NEXT REGISTER IN THE SEQUENCE
+     1                   ;               AND THE FUNCTION RETURNS TRUE.
+     1                   ;
+     1                   NXTRG:
+     1   02A8:3AFD20             LDA     RGPTR           ;GET REGISTER POINTER
+     1   02AB:FE0C               CPI     NUMRG-1         ;DOES POINTER POINT TO LAST REGISTER?
+     1   02AD:D2F702             JNC     RETF            ;YES- UNABLE TO ADVANCE POINTER - RETURN FALSE
+     1   02B0:3C                 INR     A               ;NO - ADVANCE REGISTER POINTER
+     1   02B1:32FD20             STA     RGPTR           ;SAVE REGISTER POINTER
+     1   02B4:C3FA02             JMP     RETT            ;RETURN TRUE
+     1                   ;
+     1                   ;***********************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: OUTPT - OUTPUT CHARACTERS TO DISPLAY
+     1                   ;INPUTS:    A - DISPLAY FLAG -  0 = USE ADDRESS FIELD
+     1                   ;                               1 = USE DATA FIELD
+     1                   ;           B - DOT FLAG     -  1 = OUTPUT DOT AT RIGHT EDGE OF FIELD
+     1                   ;                               0 = NO DOT
+     1                   ;           HL- ADDRESS OF CHARACTERS TO BE OUTPUT
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   OUTPT SENDS CHARACTERS TO THE DISPLAY. THE ADDRESS
+     1                   ;               OF THE CHARACTERS IS RECEIVED AS AN ARGUMENT. EITHER
+     1                   ;               2 CHARACTERS ARE SENT TO THE DATA FIELD, OR 4 CHARACTERS
+     1                   ;               ARE SENT TO THE ADDRESS FIELD, DEPENDING ON THE
+     1                   ;               DISPLAY FLAG ARGUMENT. THE DOT FLAG ARGUMENT DETERMINES
+     1                   ;               WHETHER OR NOT A DOT(DECIMAL POINT) WILL BE SENT
+     1                   ;               ALONG WITH THE LAST OUTPUT CHARACTER.
+     1                   ;
+     1                   OUTPT:
+     1   02B7:0F                 RRC                     ;USE DATA FIELD ?
+     1   02B8:DAC202             JC      OUT05           ;YES - GO SET UP TO USE DATA FIELD
+     1   02BB:0E04               MVI     C,4             ;NO - COUNT FOR ADDRESS FIELD
+     1   02BD:3E90               MVI     A,ADISP         ;CONTROL CHARACTER FOR OUTPUT TO ADDRESS
+     1                                                   ;/FIELD OF DISPLAY
+     1   02BF:C3C602             JMP     OUT10
+     1                   OUT05:
+     1   02C2:0E02               MVI     C,2             ;COUNT FOR DATA FIELD
+     1   02C4:3E94               MVI     A,DDISP         ;CONTROL CHARACTER FOR OUTPUT TO DATA FIELD
+     1                                                   ;/OF DISPLAY
+     1                   OUT10:
+     1   02C6:320019             STA     CNTRL
+     1                   OUT15:
+     1   02C9:7E                 MOV     A,M             ;GET OUTPUT CHARACTER
+     1   02CA:EB                 XCHG                    ;SAVE OUTPUT CHARACTER ADDRESS IN D & E
+     1   02CB:218403             LXI     H,DSPTB         ;GET DISPLAY FORMAT TABLE ADDRESS
+     1   02CE:85                 ADD     L               ;USE OUTPUT CHARACTER AS A POINTER TO
+     1   02CF:6F                 MOV     L,A             ;/DISPLAY FORMAT TABLE
+     1   02D0:7E                 MOV     A,M             ;GET DISPLAY FORMAT CHARACTER FROM TABLE
+     1   02D1:61                 MOV     H,C             ;TEST COUNTER WITHOUT CHANGING IT
+     1   02D2:25                 DCR     H               ;IS THIS THE LAST CHARACTER ?
+     1   02D3:C2DC02             JNZ     OUT20           ;NO - GO OUTPUT CHARACTER AS IS
+     1   02D6:05                 DCR     B               ;YES - IS DOT FLAG SET  ?
+     1   02D7:C2DC02             JNZ     OUT20           ;NO - GO OUTPUT CHARACTER AS IS
+     1   02DA:F608               ORI     DTMSK           ;YES - OR IN MASK TO DISPLAY DOT WITH
+     1                                                   ;/LAST CHARACTER
+     1                   OUT20:
+     1   02DC:2F                 CMA                     ;COMPLEMENT OUTPUT CHARACTER
+     1   02DD:320018             STA     DSPLY           ;SEND CHARACTER TO DISPLAY
+     1   02E0:EB                 XCHG                    ;RETRIEVE OUTPUT CHARACTER ADDRESS
+     1   02E1:23                 INX     H               ;NEXT OUTPUT CHARACTER
+     1   02E2:0D                 DCR     C               ;ANY MORE OUTPUT CHARACTERS ?
+     1   02E3:C2C902             JNZ     OUT15           ;YES - GO PROCESS ANOTHER CHARACTER
+     1   02E6:C9                 RET                     ;NO - RETURN
+     1                   ;
+     1                   ;*****************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: RDKBD - READ KEYBOARD
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: A - CHARACTER READ FROM KEYBOARD
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: A,H,L,F/F'S
+     1                   ;DESCRIPTION:   RDKBD DETERMINES WHETHER OR NOT THERE IS A CHARACTER IN
+     1                   ;               THE INPUT BUFFER. IF NOT, THE FUNCTION ENABLES
+     1                   ;               INTERRUPTS AND LOOPS UNTIL THE INPUT INTERRUPT
+     1                   ;               ROUTINE STORES A CHARACTER IN THE BUFFER. WHEN
+     1                   ;               THE BUFFER CONTAINS A CHARACTER, THE FUNCTION FLAGS
+     1                   ;               THE BUFFER AS EMPTY AND RETURNS THE CHARACTER
+     1                   ;               AS OUTPUT.
+     1                   ;
+     1                   RDKBD:
+     1   02E7:21FE20             LXI     H,IBUFF         ;GET INPUT BUFFER ADDRESS
+     1   02EA:7E                 MOV     A,M             ;GET BUFFER CONTENTS
+     1                                                   ;HIGH ORDER BIT -1 MEANS BUFFER IS EMPTY
+     1   02EB:B7                 ORA     A               ;IS A CHARACTER AVAILABLE ?
+     1   02EC:F2F302             JP      RDK10           ;YES - EXIT FROM LOOP
+     1   02EF:FB                 EI      ;NO - READY FOR CHARACTER FROM KEYBOARD
+     1   02F0:C3E702             JMP     RDKBD
+     1                   RDK10:
+     1   02F3:3680               MVI     M,EMPTY         ;SET BUFFER EMPTY FLAG
+     1   02F5:F3                 DI                      ;RETURN WITH INTERRUPTS DISABLED
+     1   02F6:C9                 RET
+     1                   ;
+     1                   ;********************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: RETF - RETURN FALSE
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: CARRY 0 (FALSE)
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: CARRY
+     1                   ;DESCRIPTION:   RETF IS JUMPED TO BY FUNCTIONS WISHING TO RETURN FALSE.
+     1                   ;               RETF RESETS CARRY TO 0  AND RETURNS TO THE CALLER OF
+     1                   ;               THE ROUTINE INVOKING RETF.
+     1                   ;
+     1                   RETF:
+     1   02F7:37                 STC             ;SET CARRY TRUE
+     1   02F8:3F                 CMC             ;COMPLEMENT CARRY TO MAKE IT FALSE
+     1   02F9:C9                 RET
+     1                   ;
+     1                   ;************************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: RETT RETURN TRUE
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: CARRY 1       (TRUE)
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: CARRY
+     1                   ;DESCRIPTION:   RETT IS JUMPED TO BY ROUTINES WISHING TO RETURN TRUE.
+     1                   ;               RETT SETS CARRY TO 1    AND RETURNS TO THE CALLER OF
+     1                   ;               THE ROUTINE INVOKING RETT.
+     1                   ;
+     1                   RETT:
+     1   02FA:37                 STC             ;SET CARRY TRUE
+     1   02FB:C9                 RET
+     1                   ;
+     1                   ;***************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: RGLOC- GET REGISTER SAVE LOCATION
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: HL    - REGISTER SAVE LOCATION
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: B,C,H,L,F/F'S
+     1                   ;DESCRIPTION:   RGLOC RETURNS THE SAVE LOCATION OF THE REGISTER
+     1                   ;               INDICATED BY THE CURRENT REGISTER POINTER VALUE.
+     1                   ;
+     1                   RGLOC:
+     1   02FC:2AFD20             LHLD    RGPTR           ;GET REGISTER POINTER
+     1   02FF:2600               MVI     H,0             ;/IN H & L
+     1   0301:01ED03             LXI     B,RGTBL         ;GET REGISTER SAVE LOCATION TABLE ADDRESS
+     1   0304:09                 DAD     B               ;POINTER INDEXES TABLE
+     1   0305:6E                 MOV     L,M             ;GET LOW ORDER BYTE OF REGISTER SAVE LOC.
+     1   0306:2620               MVI     H,020H    ;(RAMST SHR 8) GET HIGH ORDER BYTE OF
+     1                                                   ;/REGISTER SAVE LOCATION
+     1   0308:C9                 RET
+     1                   ;
+     1                   ;*****************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: RGNAM - DISPLAY REGISTER NAME
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: OUTPT
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   RGNAM DISPLAYS, IN THE ADDRESS FIELD OF THE DISPLAY,
+     1                   ;               THE REGISTER NAME CORRESPONDING TO THE CURRENT
+     1                   ;               REGISTER POINTER VALUE.
+     1                   ;
+     1                   RGNAM:
+     1   0309:2AFD20             LHLD    RGPTR           ;GET REGISTER POINTER
+     1   030C:2600               MVI     H,0
+     1   030E:29                 DAD     H               ;MULTIPLY POINTER VALUE BY 4
+     1   030F:29                 DAD     H               ;/(REGISTER NAME TABLE HAS 4 BYTE ENTRIES)
+     1   0310:01B903             LXI     B,NMTBL         ;GET ADDRESS OF START OF REGISTER NAME TABLE
+     1   0313:09                 DAD     B               ;ARG - ADD TABLE ADDRESS TO POINTER - RESULT IS
+     1                                                   ;/ADDRESS OF APPROPRIATE REGISTER NAME IN H & L
+     1   0314:AF                 XRA     A               ;ARG - USE ADDRESS FIELD OF DISPLAY
+     1   0315:0600               MVI     B,NODOT         ;ARG - NO DOT IN ADDRESS FIELD
+     1   0317:CDB702             CALL    OUTPT           ;OUTPUT REGISTER NAME TO ADDRESS FIELD
+     1   031A:C9                 RET
+     1                   ;
+     1                   ;***************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: RSTOR - RESTOR USER REGISTERS
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: NOTHING
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:    RSTOR RESTORES ALL CPU REGISTERS, FLIP/FLOPS,
+     1                   ;               INTERRUPT STATUS, INTERRUPT MASK, STACK POINTER
+     1                   ;               AND PROGRAM COUNTER FROM THEIR RESPECTIVE
+     1                   ;               SAVE LOCATIONS IN MEMORY. BY RESTORING THE PROGRAM
+     1                   ;               COUNTER, THE ROUTINE EFFECTIVELY TRANSFERS CONTROL TO
+     1                   ;               THE ADDRESS IN THE PROGRAM COUNTER SAVE LOCATION.
+     1                   ;
+     1                   ;               THE TIMING OF THIS ROUTINE IS CRITICAL TO THE
+     1                   ;               CORRECT OPERATION OF THE SINGLE STEP ROUTINE.
+     1                   ;               IF ANY MODIFICATION CHANGES THE NUMBER OF CPU
+     1                   ;               STATES NEEDED TO EXECUTE THIS ROUTINE THEN THE
+     1                   ;               TIMER VALUE MUST BE ADJUSTED BY THE SAME NUMBER.
+     1                   ;
+     1                   ;*****  THIS IS ALSO THE ENTRY POINT FOR THE TTY MONITOR
+     1                           ;TO RESTORE REGISTERS.
+     1                   ;
+     1                   RSTOR:
+     1   031B:3AF120             LDA     ISAV            ;GET USER INTERRUPT MASK
+     1   031E:F618               ORI     18H             ;ENABLE SETTING OF INTERRUPT MASK AND
+     1                                                   ;/RESET RST7.5  FLIP FLOP
+     1   0320:30                 SIM                     ;RESTORE USER INTERRUPT MASK
+     1                   ;       RESTORE USER INTERRUPT STATUS
+     1   0321:3AF120             LDA     ISAV            ;GET USER INTERRUPT MASK
+     1   0324:E608               ANI     08H             ;SHOULD USER INTERRUPTS BE ENABLED ?
+     1   0326:CA2D03             JZ      RSR05           ;NO - LEAVE INTERRUPTS DISABLED
+     1   0329:FB                 EI                      ;YES - ENABLE INTERRUPTS FOR USER PROGRAM
+     1   032A:C33103             JMP     RSR10
+     1                   RSR05:
+     1   032D:37                 STC                     ;DUMMY INSTRUCTIONS - WHEN SINGLE STEP ROUTINE
+     1   032E:D23103             JNC     RSR10           ;/IS BEING USED, THE TIMER IS RUNNING AND
+     1                                                   ;/EXECUTE TIME FOR THIS ROUTINE MUST NOT
+     1                                                   ;/VARY.
+     1                   RSR10:
+     1   0331:21E920             LXI     H,MNSTK         ;SET MONITOR STACK POINTER TO START OF STACK
+     1   0334:F9                 SPHL                    ;/WHICH IS ALSO END OF REGISTER SAVE AREA
+     1   0335:D1                 POP     D               ;RESTORE REGISTERS
+     1   0336:C1                 POP     B
+     1   0337:F1                 POP     PSW
+     1   0338:2AF420             LHLD    SSAV            ;RESTORE USER STACK POINTER
+     1   033B:F9                 SPHL
+     1   033C:2AF220             LHLD    PSAV
+     1   033F:E5                 PUSH    H               ;PUT USER PROGRAM COUNTER ON STACK
+     1   0340:2AEF20             LHLD    LSAV            ;RESTORE H & L REGISTERS
+     1   0343:C9                 RET                     ;JUMP TO USER PROGRAM COUNTER
+     1                   ;
+     1                   ;********************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: SETRG - SET REGISTER POINTER
+     1                   ;INPUTS: NONE
+     1                   ;OUTPUTS: CARRY - SET IF CHARACTER FROM KEYBOARD IS A REGISTER DESIGNATOR
+     1                   ;                 RESET OTHERWISE
+     1                   ;CALLS: RDKBD
+     1                   ;DESTROYS: A,B,C,H,L,F/F'S
+     1                   ;DESCRIPTION:   SETRG READS A CHARACTER FROM THE KEYBOARD. IF THE
+     1                   ;               CHARACTER IS A REGISTER DESIGNATOR, IT IS CONVERTED TO
+     1                   ;               THE CORRESPONDING REGISTER POINTER VALUE, THE POINTER IS
+     1                   ;               SAVED, AND THE FUNCTION RETURNS 'TRUE'. OTHERWISE, THE
+     1                   ;               FUNCTION RETURNS 'FALSE'.
+     1                   ;
+     1                   SETRG:
+     1   0344:CDE702             CALL    RDKBD           ;READ FROM KEYBOARD
+     1   0347:FE10               CPI     10H             ;IS CHARACTER A DIGIT?
+     1   0349:D2F702             JNC     RETF            ;NO - RETURN FALSE - CHARACTER IS NOT A
+     1                                                   ;/REGISTER DESIGNATOR
+     1   034C:D603               SUI     3               ;YES - TRY TO CONVERT REGISTER DESIGNATOR TO
+     1                                                   ;/INDEX INTO REGISTER POINTER TABLE
+     1                                                   ;WAS CONVERSION SUCCESSFUL?
+     1   034E:DAF702             JC      RETF            ;NO - RETURN FALSE
+     1   0351:4F                 MOV     C,A             ;INDEX TO B & C
+     1   0352:0600               MVI     B,0
+     1   0354:21AC03             LXI     H,RGPTB         ;GET ADDRESS OF REGISTER POINTER TABLE
+     1   0357:09                 DAD     B               ;INDEX POINTS INTO TABLE
+     1   0358:7E                 MOV     A,M             ;GET REGISTER POINTER FROM TABLE
+     1   0359:32FD20             STA     RGPTR           ;SAVE REGISTER POINTER
+     1   035C:C3FA02             JMP     RETT            ;RETURN TRUE
+     1                   ;
+     1                   ;*******************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: UPDAD - UPDATE ADDRESS FIELD OF DISPLAY
+     1                   ;INPUTS:  B - DOT FLAG - 1  MEANS PUT DOT AT RIGHT EDGE OF FIELD
+     1                   ;                        0  MEANS NO DOT
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: HXDSP,OUTPT
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   UPDAD UPDATES THE ADDRESS FIELD OF THE DISPLAY USING
+     1                   ;               THE CURRENT ADDRESS.
+     1                   ;
+     1                   UPDAD:
+     1   035F:2AF620             LHLD    CURAD           ;GET CURRENT ADDRESS
+     1   0362:EB                 XCHG                    ;ARG - PUT CURRENT ADDRESS IN D & E
+     1   0363:CD6C02             CALL    HXDSP           ;EXPAND CURRENT ADDRESS FOR DISPLAY
+     1                                                   ;ARG - ADDRESS OF EXPANDED ADDRESS IS IN H & L
+     1   0366:AF                 XRA     A               ;ARG    - USE ADDRESS FIELD OF DISPLAY
+     1                                                   ;ARG - DOT FLAG IS IN B
+     1   0367:CDB702             CALL    OUTPT           ;OUTPUT CURRENT ADDRESS TO ADDRESS FIELD
+     1   036A:C9                 RET
+     1                   ;
+     1                   ;******************************************************************************************************************
+     1                   ;
+     1                   ;FUNCTION: UPDDT - UPDATE DATA FIELD OF DISPLAY
+     1                   ;INPUTS: B - DOT FLAG - 1  MEANS PUT DOT AT RIGHT EDGE OF FIELD
+     1                   ;                       0  MEANS NO DOT
+     1                   ;OUTPUTS: NONE
+     1                   ;CALLS: HXDSP,OUTDT
+     1                   ;DESTROYS: A,B,C,D,E,H,L,F/F'S
+     1                   ;DESCRIPTION:   UPDDT UPDATES THE DATA FIELD OF THE DISPLAY USING
+     1                   ;               THE CURRENT DATA BYTE.
+     1                   ;
+     1                   UPDDT:
+     1   036B:3AF820             LDA     CURDT           ;GET CURRENT DATA
+     1   036E:57                 MOV     D,A             ;ARG - PUT CURRENT DATA IN D
+     1   036F:CD6C02             CALL    HXDSP           ;EXPAND CURRENT DATA FOR DISPLAY
+     1                                                   ;ARG - ADDRESS OF EXPANDED DATA IS IN H & L
+     1   0372:3E01               MVI     A,DTFLD         ;ARG - USE DATA FIELD OF DISPLAY
+     1                                                   ;ARG - DOT FLAG IS IN B
+     1   0374:CDB702             CALL    OUTPT           ;OUTPUT CURRENT DATA TO DATA FIELD
+     1   0377:C9                 RET
+     1                   ;
+     1                   ;******************************************************************************************************************
+     1                   ;
+     1                   ;                                       MONITOR TABLES
+     1                   ;
+     1                   ;******************************************************************************************************************
+     1                   ;
+     1                   ;COMMAND TABLE
+     1                   ;       COMMAND CHARACTERS AS RECEIVED FROM KEYBOARD
+     1                   CMDTB:
+     1   0378:12                 DB      12H             ;GO COMMAND
+     1   0379:13                 DB      13H             ;SUBSTITUTE MEMORY COMMAND
+     1   037A:14                 DB      14H             ;EXAMINE REGISTERS COMMAND
+     1   037B:15                 DB      15H             ;SINGLE STEP COMMAND
+     1                   NUMC    EQU     $-CMDTB         ;NUMBER OF COMMANDS
+     1                   ;
+     1                   ;*******************************************************************************************************************
+     1                   ;
+     1                   ; COMMAND ROUTINE ADDRESS TABLE
+     1                   ; (MUST BE IN REVERSE ORDER OF COMMAND TABLE)
+     1                   CMDAD:
+     1   037C:FD00               DW      SSTEP           ;ADDRESSOFSINGLE STEP ROUTINE
+     1   037E:9200               DW      EXAM            ;ADDRESSOFEXAMINE REGISTERS ROUTINE
+     1   0380:8B01               DW      SUBST           ;ADDRESSOFSUBSTITUTE MEMORY ROUTINE
+     1   0382:CB00               DW      GOCMD           ;ADDRESSOFGO ROUTINE
+     1                   ;
+     1                   ;*******************************************************************************************************************
+     1                   ;
+     1                   DSPTB:                          ; TABLE FOR TRANSLATING CHARACTERS FOR OUTPUT
+     1                   ;
+     1                   ;               DISPLAY
+     1                   ;               FORMAT          CHARACTER
+     1                   ;               =======         =========
+     1                   ;
+     1                   ZERO    EQU     $- DSPTB
+     1   0384:F3                 DB      0F3H            ;0
+     1   0385:60                 DB       60H            ;1
+     1   0386:B5                 DB      0B5H            ;2
+     1   0387:F4                 DB      0F4H            ;3
+     1   0388:66                 DB       66H            ;4
+     1                   FIVE    EQU     $- DSPTB
+     1                   LETRS   EQU     $- DSPTB
+     1   0389:D6                 DB      0D6H            ;5 AND S
+     1   038A:D7                 DB      0D7H            ;6
+     1   038B:70                 DB       70H            ;7
+     1                   EIGHT   EQU     $- DSPTB
+     1   038C:F7                 DB      0F7H            ;8
+     1   038D:76                 DB       76H            ;9
+     1                   LETRA   EQU     $- DSPTB
+     1   038E:77                 DB       77H            ;A
+     1                   LETRB   EQU     $- DSPTB
+     1   038F:C7                 DB      0C7H            ;B(LOWER CASE)
+     1                   LETRC   EQU     $- DSPTB
+     1   0390:93                 DB       93H            ;C
+     1                   LETRD   EQU     $- DSPTB
+     1   0391:E5                 DB      0E5H            ;D(LOWER CASE)
+     1                   LETRE   EQU     $- DSPTB
+     1   0392:97                 DB       97H            ;E
+     1                   LETRF   EQU     $- DSPTB
+     1   0393:17                 DB       17H            ;F
+     1                   LETRH   EQU     $- DSPTB
+     1   0394:67                 DB       67H            ;H
+     1                   LETRL   EQU     $- DSPTB
+     1   0395:83                 DB       83H    ;       ;L
+     1                   LETRP   EQU     $- DSPTB
+     1   0396:37                 DB       37H            ;P
+     1                   LETRI   EQU     $- DSPTB
+     1   0397:60                 DB       60H            ;I
+     1                   LETRR   EQU     $- DSPTB
+     1   0398:05                 DB       05H            ;R(LOWER CASE)
+     1                   BLANK   EQU     $- DSPTB
+     1   0399:00                 DB       00H            ;BLANK
+     1                   ;
+     1                   ;*************************************************************************************************************************
+     1                   ;
+     1                   ;MESSAGES FOR OUTPUT TO DISPLAY
+     1                   ;
+     1   039A:15151515   BLNKS: DB       BLANK,BLANK,BLANK,BLANK ;FOR ADDRESS OR DATA FIELD
+     1   039E:150E1414   ERMSG: DB       BLANK,LETRE,LETRR,LETRR ;ERROR MESSAGE FOR ADDR. FIELD
+     1   03A2:0E151515   EXMSG: DB       LETRE,BLANK,BLANK,BLANK ;EXECUTION MESSAGE
+     1                                                           ;/FOR ADDRESS FIELD
+     1   03A6:15150800   SGNAD: DB       BLANK,BLANK,EIGHT,ZERO  ;SIGN ON MESSAGE (ADDR. FIELD)
+     1   03AA:0805       SGNDT: DB       EIGHT,FIVE              ;SIGN ON MESSAGE(DATA FIELD)
+     1                   ;
+     1                   ;**************************************************************************************************************************
+     1                   ;
+     1                   RGPTB:  ; REGISTER POINTER TABLE
+     1                   ;               THE ENTRIES IN THIS TABLE ARE IN THE SAME ORDER
+     1                   ;               AS THE REGISTER DESIGNATOR KEYS ON THE KEYBOARD.
+     1                   ;               EACH ENTRY CONTAINS THE REGISTER POINTER VALUE WHICH
+     1                   ;               CORRESPONDS TO THE REGISTER DESIGNATOR. REGISTER
+     1                   ;               POINTER VALUES ARE USED TO POINT INTO THE REGISTER
+     1                   ;               NAME TABLE      (NMTBL) AND REGISTER SAVE LOCATION
+     1                   ;               TABLE   (RGTTL).
+     1                   ;
+     1   03AC:06                 DB      6       ;INTERRUPTMASK
+     1   03AD:09                 DB      9       ;SPH
+     1   03AE:0A                 DB      10      ;SPL
+     1   03AF:0B                 DB      11      ;PCH
+     1   03B0:0C                 DB      12      ;PCL
+     1   03B1:07                 DB      7       ;H
+     1   03B2:08                 DB      8       ;L
+     1   03B3:00                 DB      0       ;A
+     1   03B4:01                 DB      1       ;B
+     1   03B5:02                 DB      2       ;C
+     1   03B6:03                 DB      3       ;D
+     1   03B7:04                 DB      4       ;E
+     1   03B8:05                 DB      5       ;FLAGS
+     1                   ;
+     1                   ;***********************************************************************************************
+     1                   ;
+     1                   NMTBL:  ;REGISTER NAME TABLE
+     1                           ;NAMES OF REGISTERS IN DISPLAY FORMAT
+     1   03B9:1515150A           DB      BLANK,BLANK,BLANK,LETRA ;A REGISTER
+     1   03BD:1515150B           DB      BLANK,BLANK,BLANK,LETRB ;B REGISTER
+     1   03C1:1515150C           DB      BLANK,BLANK,BLANK,LETRC ;C REGISTER
+     1   03C5:1515150D           DB      BLANK,BLANK,BLANK,LETRD ;D REGISTER
+     1   03C9:1515150E           DB      BLANK,BLANK,BLANK,LETRE ;E REGISTER
+     1   03CD:1515150F           DB      BLANK,BLANK,BLANK,LETRF ;FLAGS
+     1   03D1:15151513           DB      BLANK,BLANK,BLANK,LETRI ;INTERRUPT MASK
+     1   03D5:15151510           DB      BLANK,BLANK,BLANK,LETRH ;H REGISTER
+     1   03D9:15151511           DB      BLANK,BLANK,BLANK,LETRL ;L REGISTER
+     1   03DD:15051210           DB      BLANK,LETRS,LETRP,LETRH ;STACK POINTER HIGH ORDER BYTE
+     1   03E1:15051211           DB      BLANK,LETRS,LETRP,LETRL ;STACK POINTER LOW ORDER BYTE
+     1   03E5:15120C10           DB      BLANK,LETRP,LETRC,LETRH ;PROGRAM COUNTER HIGH BYTE
+     1   03E9:15120C11           DB      BLANK,LETRP,LETRC,LETRL ;PROGRAM COUNTER LOW BYTE
+     1                   ;
+     1                   ;***************************************************************************************************
+     1                   ;
+     1                   ;REGISTER SAVE LOCATION TABLE
+     1                   ;ADDRESSES OF SAVE LOCATIONS OF REGISTERS IN THE ORDER IN WHICH
+     1                   ;THE REGISTERS ARE DISPLAYED BY THE EXAMINE COMMAND
+     1                   ;
+     1                   RGTBL:
+     1   03ED:EE                 DB      0EEH            ;A REGISTER
+     1   03EE:EC                 DB      0ECH            ;B REGISTER
+     1   03EF:EB                 DB      0EBH            ;C REGISTER
+     1   03F0:EA                 DB      0EAH            ;D REGISTER
+     1   03F1:E9                 DB      0E9H            ;E REGISTER
+     1   03F2:ED                 DB      0EDH            ;FLAGS
+     1   03F3:F1                 DB      0F1H            ;INTERRUPT MASK
+     1   03F4:F0                 DB      0F0H            ;H REGISTER
+     1   03F5:EF                 DB      0EFH            ;L REGISTER
+     1   03F6:F5                 DB      0F5H            ;STACK POINTER HIGH ORDER BYTE
+     1   03F7:F4                 DB      0F4H            ;STACK POINTER LOW ORDER BYTE
+     1   03F8:F3                 DB      0F3H            ;PROGRAM COUNTER HIGH ORDER BYTE
+     1   03F9:F2                 DB      0F2H            ;PROGRAM COUNTER LOW ORDER BYTE
+     1                   NUMRG   EQU     $- RGTBL;NUMBER OF ENTRIES IN
+     1                                                   ;/REGISTER SAVE LOCATION TABLE
+     1                   CURDT   EQU     20F8H
+     1                   CURAD   EQU     20F6H
+     1                   RGPTR   EQU     20FDH
+     1                   LSAV    EQU     20EFH
+     1                   PSAV    EQU     20F2H
+     1                   FSAV    EQU     20EDH
+     1                   SSAV    EQU     20F4H
+     1                   IBUFF   EQU     20FEH
+     1                   ISAV    EQU     20F1H
+     1                   MNSTK   EQU     20E9H
+     1                   OBUFF   EQU     20F9H
+     1                   USCSR   EQU     20FFH
+     1                   ;CLDBK  EQU     0008H
+     1                   BSAV    EQU     20ECH
+     1                   USRBR   EQU     20C2H
+     1                   TEMP    EQU     20FDH
