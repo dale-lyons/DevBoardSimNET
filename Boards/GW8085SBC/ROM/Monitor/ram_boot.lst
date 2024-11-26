@@ -1,0 +1,48 @@
+   c000                 DDT_START		equ	0c000h
+   0008                 ROM_BOOT_BIT		equ	08h
+   0010                 ROM_ENABLE_BIT		equ	10h
+   0080                 USER_LED_BIT		equ	80h
+   1000                 RAM_BOOT		equ	01000h
+                        
+   1000                 	org	RAM_BOOT
+                        	; Rom on, bank 1 user light off
+   1000   3e 11         	mvi	a,ROM_ENABLE_BIT OR 1
+   1002   d3 02         	out	02
+                        
+   1004   21 00 c0      	lxi	h,	DDT_START
+   1007   11 00 f0      	lxi	d,	0f000h
+   100a   01 00 10      	lxi	b,	1000h
+   100d                 rmb01:
+   100d   1a            	ldax	d
+   100e   77            	mov		m,a
+   100f   13            	inx		d
+   1010   23            	inx		h
+   1011   0b            	dcx		b
+   1012   78            	mov		a,b
+   1013   b1            	ora		c
+   1014   c2 0d 10      	jnz		rmb01
+                        
+                        	; Rom on, bank 2, user light off
+   1017   3e 12         	mvi	a,	ROM_ENABLE_BIT OR 2
+   1019   d3 02         	out		02h
+                        
+   101b   11 00 f0      	lxi	d,	0f000h
+   101e   01 00 10      	lxi	b,	1000h
+   1021                 rmb02:
+   1021   1a            	ldax	d
+   1022   77            	mov		m,a
+   1023   13            	inx		d
+   1024   23            	inx		h
+   1025   0b            	dcx		b
+   1026   78            	mov		a,b
+   1027   b1            	ora		c
+   1028   c2 21 10      	jnz		rmb02
+                        
+                        	; ROM off, boot ROM off, select bank#0, user light off
+   102b   3e 80         	mvi		a,USER_LED_BIT
+   102d   d3 02         	out		02h
+   102f   c3 00 c0      	jmp		DDT_START
+   1032                 	end
+c000  DDT_START     1000  RAM_BOOT      0008  ROM_BOOT_BIT    0010  ROM_ENABLE_BIT
+0080  USER_LED_BIT    100d  rmb01         1021  rmb02         
+

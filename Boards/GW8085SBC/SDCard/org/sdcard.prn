@@ -1,0 +1,690 @@
+     1                   CR              equ     0dh
+     1                   LF              equ     0ah
+     1                   SPACE           equ     020h
+     1                   BACKSPACE       equ     08h
+     1                   TAB             equ     09h
+     1                           org     08000h
+     1   8000:310090             lxi     sp, 09000h
+     1   8003:CD6782             call    UartInit
+     1   8006:CD3581             call    Reset
+     1   8009:CD1781             call    HW_TEST
+     1   800C:DA4380             jc      fail
+     1                   pass:
+     1   800F:CDB081             call    SetMode
+     1   8012:DA4380             jc      fail
+     1   8015:CD4981             call    ConnectDisk
+     1   8018:DA4380             jc      fail
+     1   801B:CD5581             call    MountDisk
+     1   801E:DA4380             jc      fail
+     1   8021:117080             lxi     d, file
+     1   8024:CD6181             call    OpenFile
+     1   8027:DA4380             jc      fail
+     1   802A:117780             lxi     d,fileBuff
+     1   802D:0E80               mvi     c,80h
+     1   802F:CDC081             call    readFile
+     1   8032:DA4380             jc      fail
+     1   8035:217780             lxi     h,fileBuff
+     1   8038:0680               mvi     b,80h
+     1                   @@:
+     1   803A:7E                 mov     a,m
+     1                   ;       call    hexOut
+     1   803B:23                 inx     h
+     1   803C:05                 dcr     b
+     1   803D:C23A80             jnz     @B
+     1   8040:C34980             jmp     done
+     1                   fail:
+     1   8043:215F80             lxi     h,no
+     1   8046:CD8983             call    printf
+     1                   done:
+     1   8049:215280             lxi     h,alldone
+     1   804C:CD8983             call    printf
+     1                   @@:     
+     1   804F:C34F80             jmp     @B
+     1   8052:0D0A416C6C alldone:db      13, 10, 'AllDone!', 13, 10, 0
+     1   805F:0D0A746573 no:     db      13, 10, 'test failed!', 13, 10, 0
+     1   8070:2F732E6161 file:   db      '/s.aaa', 0
+     1                   fileBuff:
+     1   8077:FFFFFFFFFF         ds      128
+     1   80F7:FFFFFFFFFF         ds      32
+     1                   CH_COMMAND_PORT         equ 81h
+     1                   CH_DATA_PORT            equ 80h
+     1                   MODE_HOST_1             equ     06h
+     1                   ;--- Commands
+     1                   CH_CMD_GET_IC_VER       equ 01h
+     1                   CH_CMD_RESET_ALLequ 05h
+     1                   CH_CMD_CHECK_EXIST      equ 06h
+     1                   CH_CMD_READ_VAR8equ 0Ah
+     1                   CH_CMD_SET_RETRYequ 0Bh
+     1                   CH_CMD_WRITE_VAR8       equ 0Bh
+     1                   CH_CMD_READ_VAR32       equ 0Ch
+     1                   CH_CMD_WRITE_VAR32      equ 0Dh
+     1                   CH_CMD_DELAY_100US      equ 0Fh
+     1                   CH_CMD_SET_USB_ADDR     equ 13h
+     1                   CH_CMD_SET_USB_MODE     equ 15h
+     1                   CH_CMD_TEST_CONNECT     equ 16h
+     1                   CH_CMD_ABORT_NAKequ 17h
+     1                   CH_CMD_GET_STATUS       equ 22h
+     1                   CH_CMD_RD_USB_DATA0     equ 27h
+     1                   CH_CMD_WR_HOST_DATA     equ 2Ch
+     1                   CH_CMD_WR_REQ_DATA      equ 2Dh
+     1                   CH_CMD_SET_FILE_NAME    equ 2Fh
+     1                   CH_CMD_DISK_CONNECT     equ 30h
+     1                   CH_CMD_DISK_MOUNT       equ 31h
+     1                   CH_CMD_FILE_OPENequ 32h
+     1                   CH_CMD_FILE_ENUM_GO     equ 33h
+     1                   CH_CMD_FILE_CREATE      equ 34h
+     1                   CH_CMD_FILE_ERASE       equ 35h
+     1                   CH_CMD_FILE_CLOSE       equ 36h
+     1                   CH_CMD_DIR_INFO_READ    equ 37h
+     1                   CH_CMD_BYTE_LOCATE      equ 39h
+     1                   CH_CMD_BYTE_READequ 3Ah
+     1                   CH_CMD_BYTE_RD_GO       equ 3Bh
+     1                   CH_CMD_BYTE_WRITE       equ 3Ch
+     1                   CH_CMD_BYTE_WRITE_GO    equ 3Dh
+     1                   CH_CMD_DIR_CREATE       equ 40h
+     1                   CH_CMD_SET_ADDRESS      equ 45h
+     1                   CH_CMD_GET_DESCRequ 46h
+     1                   CH_CMD_SET_CONFIG       equ 49h
+     1                   CH_CMD_ISSUE_TKN_X      equ 4Eh
+     1                   ;--- PIDs
+     1                   CH_PID_SETUP            equ 0Dh
+     1                   CH_PID_IN               equ 09h
+     1                   CH_PID_OUT              equ 01h
+     1                   ;--- Status codes
+     1                   CH_ST_INT_SUCCESS       equ 14h
+     1                   CH_ST_INT_CONNECT       equ 15h
+     1                   CH_ST_INT_DISCONNECT    equ 16h
+     1                   CH_ST_INT_BUF_OVER      equ 17h
+     1                   CH_ST_INT_DISK_READ     equ 1Dh
+     1                   CH_ST_INT_DISK_WRITE    equ 1Eh
+     1                   CH_ST_INT_DISK_ERR      equ 1Fh
+     1                   CH_ST_RET_SUCCESS       equ 51h
+     1                   CH_ST_RET_ABORT         equ 5Fh
+     1                   ; -----------------------------------------------------------------------------
+     1                   ; HW_TEST: Check if the USB host controller hardware is operational
+     1                   ; -----------------------------------------------------------------------------
+     1                   ; Output: Cy = 0 if hardware is operational, 1 if it's not
+     1                   HW_TEST:
+     1   8117:3E34               mvi             a,34h
+     1   8119:CD2781             call            HW_TEST_DO
+     1   811C:37                 stc
+     1   811D:C0                 rnz
+     1   811E:3E89               mvi             a,89h
+     1   8120:CD2781             call            HW_TEST_DO
+     1   8123:37                 stc
+     1   8124:C0                 rnz
+     1   8125:B7                 ora     a
+     1   8126:C9                 ret
+     1                   HW_TEST_DO:
+     1   8127:47                 mov             b,a
+     1   8128:3E06               mvi             a,CH_CMD_CHECK_EXIST
+     1   812A:D381               out             CH_COMMAND_PORT
+     1   812C:78                 mov             a,b
+     1   812D:EEFF               xri             0ffh
+     1   812F:D380               out             CH_DATA_PORT
+     1   8131:DB80               in              CH_DATA_PORT
+     1   8133:B8                 cmp             b
+     1   8134:C9                 ret
+     1                   Reset:
+     1   8135:3E05               mvi     a,CH_CMD_RESET_ALL
+     1   8137:D381               out     CH_COMMAND_PORT
+     1   8139:CD3D81             call    sDelay
+     1   813C:C9                 ret
+     1                   sDelay:
+     1   813D:C5                 push    b
+     1   813E:0100A0             lxi     b,0a000h
+     1                   @@:
+     1   8141:0B                 dcx     b
+     1   8142:78                 mov     a,b
+     1   8143:B1                 ora     c
+     1   8144:C24181             jnz     @B
+     1   8147:C1                 pop     b
+     1   8148:C9                 ret
+     1                   ConnectDisk:
+     1   8149:3E30               mvi     a,CH_CMD_DISK_CONNECT
+     1   814B:D381               out     CH_COMMAND_PORT
+     1   814D:3E22               mvi     a,CH_CMD_GET_STATUS
+     1   814F:D381               out     CH_COMMAND_PORT
+     1   8151:CD5082             call    waitForInt
+     1   8154:C9                 ret
+     1                   MountDisk:
+     1   8155:3E31               mvi     a,CH_CMD_DISK_MOUNT
+     1   8157:D381               out     CH_COMMAND_PORT
+     1   8159:3E22               mvi     a,CH_CMD_GET_STATUS
+     1   815B:D381               out     CH_COMMAND_PORT
+     1   815D:CD5082             call    waitForInt
+     1   8160:C9                 ret
+     1                   OpenFile:
+     1   8161:CD6D81             call    SetFilename
+     1   8164:D8                 rc
+     1   8165:3E32               mvi     a,CH_CMD_FILE_OPEN
+     1   8167:D381               out     CH_COMMAND_PORT
+     1   8169:CD5082             call    waitForInt
+     1   816C:C9                 ret
+     1                   ;Input - de - ptr to filename to set
+     1                   ;Output cy =0  success
+     1                   ;          = 1 fail
+     1                   SetFilename:
+     1   816D:D5                 push    d
+     1   816E:3E2F               mvi     a,CH_CMD_SET_FILE_NAME
+     1   8170:D381               out     CH_COMMAND_PORT
+     1                   @@:
+     1   8172:1A                 ldax    d
+     1   8173:D380               out     CH_DATA_PORT
+     1   8175:B7                 ora     a
+     1   8176:CA7D81             jz      @F
+     1   8179:13                 inx     d
+     1   817A:C37281             jmp     @B
+     1                   @@:
+     1   817D:D1                 pop     d
+     1   817E:CD5082             call    waitForInt
+     1   8181:C9                 ret
+     1                   fileSize:
+     1   8182:3E0C               mvi     a,CH_CMD_READ_VAR32
+     1   8184:D381               out     CH_COMMAND_PORT
+     1   8186:3E68               mvi     a,068h
+     1   8188:D381               out     CH_COMMAND_PORT
+     1   818A:CD5082             call    waitForInt
+     1   818D:D8                 rc
+     1   818E:DB80               in      CH_DATA_PORT
+     1   8190:57                 mov     d,a
+     1   8191:DB80               in      CH_DATA_PORT
+     1   8193:5F                 mov     e,a
+     1   8194:DB80               in      CH_DATA_PORT
+     1   8196:67                 mov     h,a
+     1   8197:DB80               in      CH_DATA_PORT
+     1   8199:6F                 mov     l,a
+     1   819A:B7                 ora     a
+     1   819B:C9                 ret
+     1                   readResult:
+     1   819C:3E22               mvi     a,CH_CMD_GET_STATUS
+     1   819E:D381               out     CH_COMMAND_PORT
+     1   81A0:DB80               in      CH_DATA_PORT
+     1   81A2:E640               ani     40h
+     1   81A4:C29C81             jnz     readResult
+     1   81A7:DB80               in      CH_DATA_PORT
+     1   81A9:CDE083             call    hexOut
+     1   81AC:CDCA83             call    crlf
+     1   81AF:C9                 ret
+     1                   SetMode:
+     1   81B0:3E15               mvi     a,CH_CMD_SET_USB_MODE
+     1   81B2:D381               out     CH_COMMAND_PORT
+     1   81B4:CD5082             call    waitForInt
+     1   81B7:3E06               mvi     a,MODE_HOST_1
+     1   81B9:CD4A82             call    outData
+     1   81BC:CD5082             call    waitForInt
+     1   81BF:C9                 ret
+     1                   readFile:
+     1   81C0:D5                 push    d
+     1   81C1:3E3A               mvi     a,CH_CMD_BYTE_READ
+     1   81C3:CD4182             call    sendCommand
+     1   81C6:3E80               mvi     a,80h
+     1   81C8:CD4A82             call    outData
+     1   81CB:3E00               mvi     a,0
+     1   81CD:CD4A82             call    outData
+     1   81D0:CD3882             call    sendAndInData
+     1   81D3:FE1D               cpi     01dh
+     1   81D5:CDE083             call    hexOut
+     1   81D8:CAE381             jz      rdf05
+     1   81DB:FE14               cpi     014h
+     1   81DD:CA1282             jz      rdf10
+     1   81E0:C31282             jmp     rdf10
+     1                   rdf05:
+     1   81E3:3E27               mvi     a,27h
+     1   81E5:CD4182             call    sendCommand
+     1   81E8:CD4782             call    inData
+     1   81EB:FE80               cpi     80h
+     1   81ED:D2FD81             jnc     rdf20
+     1   81F0:E1                 pop     h
+     1   81F1:E5                 push    h
+     1   81F2:F5                 push    psw
+     1   81F3:0680               mvi     b,80h
+     1                   @@:
+     1   81F5:3600               mvi     m,0
+     1   81F7:23                 inx     h
+     1   81F8:05                 dcr     b
+     1   81F9:C2F581             jnz     @B
+     1   81FC:F1                 pop     psw
+     1                   rdf20:
+     1   81FD:E1                 pop     h
+     1   81FE:CD2D82             call    inHLRepZ
+     1   8201:E5                 push    h
+     1   8202:3E3B               mvi     a,CH_CMD_BYTE_RD_GO
+     1   8204:CD4182             call    sendCommand
+     1   8207:3E22               mvi     a,CH_CMD_GET_STATUS
+     1   8209:CD4182             call    sendCommand
+     1   820C:CD4782             call    inData
+     1   820F:E1                 pop     h
+     1   8210:BF                 cmp     a
+     1   8211:C9                 ret
+     1                   rdf10:
+     1   8212:D1                 pop     d
+     1   8213:F601               ori     01h
+     1   8215:C9                 ret
+     1                   here:
+     1   8216:F5                 push    psw
+     1   8217:E5                 push    h
+     1   8218:212182             lxi     h,msghere
+     1   821B:CD8983             call    printf
+     1   821E:E1                 pop     h
+     1   821F:F1                 pop     psw
+     1   8220:C9                 ret
+     1   8221:0D0A486572 msghere:db      13,10,'Here!!!', 13, 10, 0
+     1                   inHLRepZ:
+     1   822D:F5                 push    psw
+     1                   @@:
+     1   822E:DB80               in      CH_DATA_PORT
+     1   8230:77                 mov     m,a
+     1   8231:23                 inx     h
+     1   8232:05                 dcr     b
+     1   8233:C22E82             jnz     @B
+     1   8236:F1                 pop     psw
+     1   8237:C9                 ret
+     1                   sendAndInData:
+     1   8238:3E22               mvi     a,CH_CMD_GET_STATUS
+     1   823A:CD4182             call    sendCommand
+     1   823D:CD4782             call    inData
+     1   8240:C9                 ret
+     1                   sendCommand:
+     1   8241:D381               out     CH_COMMAND_PORT
+     1   8243:CD5082             call    waitForInt
+     1   8246:C9                 ret
+     1                   inData:
+     1   8247:DB80               in      CH_DATA_PORT
+     1   8249:C9                 ret
+     1                   outData:
+     1   824A:D380               out     CH_DATA_PORT
+     1   824C:CD5082             call    waitForInt
+     1   824F:C9                 ret
+     1                   waitForInt:
+     1   8250:0184EA             lxi     b,0ea84h
+     1                   wfi05:
+     1   8253:C5                 push    b
+     1   8254:DB81               in      CH_COMMAND_PORT
+     1   8256:E610               ani     10h
+     1   8258:C25E82             jnz     @F
+     1   825B:C1                 pop     b
+     1   825C:B7                 ora     a
+     1   825D:C9                 ret
+     1                   @@:
+     1   825E:C1                 pop     b
+     1   825F:0B                 dcx     b
+     1   8260:78                 mov     a,b
+     1   8261:B1                 ora     c
+     1   8262:C25382             jnz     wfi05
+     1   8265:37                 stc
+     1   8266:C9                 ret
+     1                   ;RESET_65       equ     034h
+     1                   ;JMP_INSTR      equ     0c3h
+     1                   UART_DATA_PORT          equ     00h
+     1                   UART_STATUS_PORTequ     01h
+     1                   UART_TX_READY           equ     01h
+     1                   UART_RX_READY           equ     02h
+     1                   UartInit:
+     1   8267:217582             lxi     h,uart
+     1   826A:0E06               mvi     c, UART_SIZE
+     1                   @@:
+     1   826C:7E                 mov     a,m
+     1   826D:D301               out     UART_STATUS_PORT
+     1   826F:23                 inx     h
+     1   8270:0D                 dcr     c
+     1   8271:C26C82             jnz     @B
+     1                   ;       call    UartResetBuffer
+     1                   ;       mvi     a,JMP_INSTR;
+     1                   ;       sta     RESET_65
+     1                   ;       lxi     h,UartRxInt
+     1                   ;       shld    RESET_65+1
+     1                   ;       lxi     h,rx_buffer
+     1                   ;       mvi     a,0dh                   ; unmask rst 6.5 interrupt
+     1                   ;       sim
+     1                   ;       ei
+     1   8274:C9                 ret
+     1   8275:000000404E uart:   db      0,0,0,40h,4eh,37h
+     1                   UART_SIZE       equ     $-uart
+     1                   ;UartResetBuffer:
+     1                   ;       push    h
+     1                   ;       mvi     h,BUFFER_PAGE
+     1                   ;       mvi     l,0
+     1                   ;@@:
+     1                   ;       mvi     m,0aah
+     1                   ;       inx     h
+     1                   ;       mov     a,l
+     1                   ;       ora     a
+     1                   ;       jnz     @B
+     1                   ;       sta     rx_begin
+     1                   ;       sta     rx_end
+     1                   ;       pop     h
+     1                   ;       ret
+     1                   ;UartRxInt:
+     1                   ;       push    psw
+     1                   ;       push    h
+     1                   ;       mvi     h,BUFFER_PAGE
+     1                   ;       lda     rx_end
+     1                   ;       mov     l,a
+     1                   ;       in      UART_DATA_PORT
+     1                   ;       mov     m,a
+     1                   ;       inx     h
+     1                   ;       mov     a,l
+     1                   ;       sta     rx_end
+     1                   ;       pop     h
+     1                   ;       pop     psw
+     1                   ;       ei
+     1                   ;       ret
+     1                   UartStatus:
+     1                   UartStatusRx:
+     1   827B:DB01               in      UART_STATUS_PORT
+     1   827D:E602               ani     UART_RX_READY
+     1   827F:C9                 ret
+     1                   ;UartStatusRx:
+     1                   ;       push    b
+     1                   ;       lda     rx_begin
+     1                   ;       mov     b,a
+     1                   ;       lda     rx_end
+     1                   ;       cmp     b
+     1                   ;       pop     b
+     1                   ;       ret
+     1                   ;UartRead:
+     1                   ;       call    UartStatusRx
+     1                   ;       jz      UartRead
+     1                   ;       push    b
+     1                   ;       push    h
+     1                   ;       mvi     h,BUFFER_PAGE
+     1                   ;       lda     rx_begin
+     1                   ;       mov     l,a
+     1                   ;       mov     b,m
+     1                   ;       inx     h
+     1                   ;       mov     a,l
+     1                   ;       sta     rx_begin
+     1                   ;       mov     a,b
+     1                   ;       pop     h
+     1                   ;       pop     b
+     1                   ;       ret
+     1                   UartRead:
+     1   8280:CD7B82             call    UartStatusRx
+     1   8283:CA8082             jz      UartRead
+     1   8286:DB00               in      UART_DATA_PORT
+     1   8288:C9                 ret
+     1                   UartWrite:
+     1   8289:F5                 push    psw
+     1                   @@:
+     1   828A:DB01               in      UART_STATUS_PORT
+     1   828C:E601               ani     UART_TX_READY
+     1   828E:CA8A82             jz      @B
+     1   8291:F1                 pop     psw
+     1   8292:D300               out     UART_DATA_PORT
+     1   8294:C9                 ret
+     1                   ;rx_begin:      db      0
+     1                   ;rx_end:        db      0
+     1                   ;BUFFER_PAGE    equ     (($+255)/ 256)
+     1                   ;       org     BUFFER_PAGE*256
+     1                   ;rx_buffer:     ds      256
+     1                   ; returns length of null terminated string
+     1                   ; hl - ptr to string
+     1                   ; returns a: length of string
+     1                   strlen:
+     1   8295:C5                 push    b
+     1   8296:E5                 push    h
+     1   8297:0600               mvi     b,0
+     1                   strlen05:
+     1   8299:7E                 mov     a,m
+     1   829A:FE00               cpi     0
+     1   829C:CAA482             jz      strlen99
+     1   829F:23                 inx     h
+     1   82A0:04                 inr     b
+     1   82A1:C39982             jmp     strlen05
+     1                   strlen99:
+     1   82A4:78                 mov     a,b
+     1   82A5:E1                 pop     h
+     1   82A6:C1                 pop     b
+     1   82A7:C9                 ret
+     1                   ; remove leading and traing whitespace from string
+     1                   strtrim:
+     1   82A8:C5                 push    b
+     1   82A9:E5                 push    h
+     1   82AA:F5                 push    psw
+     1                   strtrm05:
+     1   82AB:7E                 mov     a,m
+     1   82AC:B7                 ora     a
+     1   82AD:CABC82             jz      strtrm10
+     1   82B0:CDBC83             call    IsWS
+     1   82B3:C2BC82             jnz     strtrm10
+     1   82B6:CDDA82             call    strRemove
+     1   82B9:C3AB82             jmp     strtrm05
+     1                   strtrm10:
+     1   82BC:CD9582             call    strlen
+     1   82BF:B7                 ora     a
+     1   82C0:CAD682             jz      strtrm99
+     1   82C3:E5                 push    h
+     1   82C4:CD0683             call    strend
+     1   82C7:EB                 xchg
+     1   82C8:E1                 pop     h
+     1   82C9:1B                 dcx     d
+     1   82CA:1A                 ldax    d
+     1   82CB:CDBC83             call    IsWS
+     1   82CE:C2D682             jnz     strtrm99
+     1   82D1:AF                 xra     a
+     1   82D2:12                 stax    d
+     1   82D3:C3BC82             jmp     strtrm10
+     1                   strtrm99:
+     1   82D6:F1                 pop     psw
+     1   82D7:E1                 pop     h
+     1   82D8:C1                 pop     b
+     1   82D9:C9                 ret
+     1                   strRemove:
+     1   82DA:F5                 push    psw
+     1   82DB:E5                 push    h
+     1   82DC:D5                 push    d
+     1   82DD:E5                 push    h
+     1   82DE:D1                 pop     d
+     1   82DF:13                 inx     d
+     1                   strrm05:
+     1   82E0:1A                 ldax    d
+     1   82E1:77                 mov     m,a
+     1   82E2:13                 inx     d
+     1   82E3:23                 inx     h
+     1   82E4:B7                 ora     a
+     1   82E5:C2E082             jnz     strrm05
+     1   82E8:D1                 pop     d
+     1   82E9:E1                 pop     h
+     1   82EA:F1                 pop     psw
+     1   82EB:C9                 ret
+     1                   ; convert charcter to upper case
+     1                   upperCase:
+     1   82EC:FE61               cpi     'a'
+     1   82EE:DAF882             jc      upc05
+     1   82F1:FE7B               cpi     'z'+1
+     1   82F3:D2F882             jnc     upc05
+     1   82F6:D620               sui     020h
+     1                   upc05:
+     1   82F8:C9                 ret
+     1                   ; convert charcter to lower case
+     1                   lowerCase:
+     1   82F9:FE41               cpi     'A'
+     1   82FB:DA0583             jc      lwc05
+     1   82FE:FE5A               cpi     'Z'
+     1   8300:D20583             jnc     lwc05
+     1   8303:C620               adi     020h
+     1                   lwc05:
+     1   8305:C9                 ret
+     1                   ; locate end of string
+     1                   ; hl - str1
+     1                   ; output - hl - pointer to null terminating byte of str1
+     1                   strend:
+     1   8306:D5                 push    d
+     1   8307:CD9582             call    strlen
+     1   830A:5F                 mov     e,a
+     1   830B:1600               mvi     d,0
+     1   830D:19                 dad     d
+     1   830E:D1                 pop     d
+     1   830F:C9                 ret
+     1                   ; convert string to binary
+     1                   ; hl - pointer to string
+     1                   ; output bc - value
+     1                   ; carry - set: error
+     1                   char2bin:
+     1   8310:E5                 push    h
+     1   8311:010000             lxi     b,0
+     1                   @@:
+     1   8314:7E                 mov     a,m
+     1   8315:B7                 ora     a
+     1   8316:CA2A83             jz      @F
+     1   8319:CD2C83             call    ascii2Bin
+     1   831C:DA2A83             jc      @F
+     1   831F:CD4383             call    shlBC4
+     1   8322:E60F               ani     0fh
+     1   8324:B1                 ora     c
+     1   8325:4F                 mov     c,a
+     1   8326:23                 inx     h
+     1   8327:C31483             jmp     @B
+     1                   @@:
+     1   832A:E1                 pop     h
+     1   832B:C9                 ret
+     1                   ascii2Bin:
+     1   832C:CDAE83             call    IsDigit
+     1   832F:DA3683             jc      @F
+     1   8332:D630               sui     '0'
+     1   8334:B7                 ora     a
+     1   8335:C9                 ret
+     1                   @@:
+     1   8336:CDEC82             call    upperCase
+     1   8339:CDB583             call    IsHexLetter
+     1   833C:D8                 rc
+     1   833D:D641               sui     'A'
+     1   833F:C60A               adi     0ah
+     1   8341:B7                 ora     a
+     1   8342:C9                 ret
+     1                   ; shift BC register left 4 bits.
+     1                   shlBC4:
+     1   8343:D5                 push    d
+     1   8344:1E04               mvi     e,4
+     1   8346:CD4B83             call    shlBCe
+     1   8349:D1                 pop     d
+     1   834A:C9                 ret
+     1                   shlBCe:
+     1   834B:F5                 push    psw
+     1   834C:D5                 push    d
+     1                   shl05:
+     1   834D:37                 stc
+     1   834E:3F                 cmc
+     1   834F:79                 mov     a,c
+     1   8350:17                 ral
+     1   8351:4F                 mov     c,a
+     1   8352:78                 mov     a,b
+     1   8353:17                 ral
+     1   8354:47                 mov     b,a
+     1   8355:1D                 dcr     e
+     1   8356:C24D83             jnz     shl05
+     1   8359:D1                 pop     d
+     1   835A:F1                 pop     psw
+     1   835B:C9                 ret
+     1                   ; Input
+     1                   ;    hl: command with error
+     1                   cmdError:
+     1   835C:E5                 push    h
+     1   835D:217183             lxi     h, errMsg1
+     1   8360:CD8983             call    printf
+     1   8363:E1                 pop     h
+     1   8364:CD8983             call    printf
+     1   8367:217B83             lxi     h, errMsg2
+     1   836A:CD8983             call    printf
+     1   836D:CDCA83             call    crlf
+     1   8370:C9                 ret
+     1   8371:4572726F72 errMsg1:db      'Error in ', 0
+     1   837B:20636F6D6D errMsg2:db      ' command', 0
+     1                   outPrompt:
+     1   8384:3E2D               mvi     a,'-'
+     1   8386:C38982             jmp     UartWrite
+     1                   ; print string to console
+     1                   ; Input
+     1                   ;   HL - string to print (null terminated)
+     1                   ; Output
+     1                   ;   HL byte past end of string
+     1                   printf:
+     1   8389:7E                 mov     a,m
+     1   838A:23                 inx     h
+     1   838B:B7                 ora     a
+     1   838C:C29083             jnz     @F
+     1   838F:C9                 ret
+     1                   @@:
+     1   8390:CD8982             call    UartWrite
+     1   8393:C38983             jmp     printf
+     1                   outColon:
+     1   8396:F5                 push    psw
+     1   8397:3E3A               mvi     a,':'
+     1   8399:CD8982             call    UartWrite
+     1   839C:F1                 pop     psw
+     1   839D:C9                 ret
+     1                   outSpace:
+     1   839E:F5                 push    psw
+     1   839F:3E20               mvi     a,' '
+     1   83A1:CD8982             call    UartWrite
+     1   83A4:F1                 pop     psw
+     1   83A5:C9                 ret
+     1                   IsHexDigit:
+     1   83A6:CDAE83             call    IsDigit
+     1   83A9:D0                 rnc
+     1   83AA:CDB583             call    IsHexLetter
+     1   83AD:C9                 ret
+     1                   IsDigit:
+     1   83AE:FE30               cpi     '0'
+     1   83B0:D8                 rc
+     1   83B1:FE3A               cpi     '9'+1
+     1   83B3:3F                 cmc
+     1   83B4:C9                 ret
+     1                   IsHexLetter:
+     1   83B5:FE41               cpi     'A'
+     1   83B7:D8                 rc
+     1   83B8:FE5A               cpi     'Z'
+     1   83BA:3F                 cmc
+     1   83BB:C9                 ret
+     1                   IsWS:
+     1   83BC:B7                 ora     a
+     1   83BD:C8                 rz
+     1   83BE:FE20               cpi     SPACE
+     1   83C0:C8                 rz
+     1   83C1:FE09               cpi     TAB
+     1   83C3:C8                 rz
+     1   83C4:FE0D               cpi     CR
+     1   83C6:C8                 rz
+     1   83C7:FE0A               cpi     LF
+     1   83C9:C9                 ret
+     1                   crlf:
+     1   83CA:F5                 push    psw
+     1   83CB:3E0D               mvi     a,CR
+     1   83CD:CD8982             call    UartWrite
+     1   83D0:3E0A               mvi     a,LF
+     1   83D2:CD8982             call    UartWrite
+     1   83D5:F1                 pop     psw
+     1   83D6:C9                 ret
+     1                   ; hl has number
+     1                   dhexOut:
+     1   83D7:7C                 mov     a,h
+     1   83D8:CDE083             call    hexOut
+     1   83DB:7D                 mov     a,l
+     1   83DC:CDE083             call    hexOut
+     1   83DF:C9                 ret
+     1                   hexOut:
+     1   83E0:F5                 push    psw
+     1   83E1:C5                 push    b
+     1   83E2:4F                 mov     c,a
+     1   83E3:1F                 rar
+     1   83E4:1F                 rar
+     1   83E5:1F                 rar
+     1   83E6:1F                 rar
+     1   83E7:E60F               ani     0fh
+     1   83E9:CDFB83             call    nibbleToAscii
+     1   83EC:CD8982             call    UartWrite
+     1   83EF:79                 mov     a,c
+     1   83F0:E60F               ani     0fh
+     1   83F2:CDFB83             call    nibbleToAscii
+     1   83F5:CD8982             call    UartWrite
+     1   83F8:C1                 pop     b
+     1   83F9:F1                 pop     psw
+     1   83FA:C9                 ret
+     1                   nibbleToAscii:
+     1   83FB:FE0A               cpi             0ah
+     1   83FD:DA0284             jc              @F
+     1   8400:C607               adi             07
+     1                   @@:
+     1   8402:C630               adi             30h
+     1   8404:C9                 ret

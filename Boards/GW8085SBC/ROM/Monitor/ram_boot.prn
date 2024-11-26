@@ -1,0 +1,39 @@
+     1                   DDT_START               equ     0c000h
+     1                   ROM_BOOT_BIT            equ     08h
+     1                   ROM_ENABLE_BIT          equ     10h
+     1                   USER_LED_BIT            equ     80h
+     1                   RAM_BOOT        equ     01000h
+     1                           org     RAM_BOOT
+     1                           ; Rom on, bank 1 user light off
+     1   1000:3E11               mvi     a,ROM_ENABLE_BIT OR 1
+     1   1002:D302               out     02
+     1   1004:2100C0             lxi     h,      DDT_START
+     1   1007:1100F0             lxi     d,      0f000h
+     1   100A:010010             lxi     b,      1000h
+     1                   @@:
+     1   100D:1A                 ldax    d
+     1   100E:77                 mov             m,a
+     1   100F:13                 inx             d
+     1   1010:23                 inx             h
+     1   1011:0B                 dcx             b
+     1   1012:78                 mov             a,b
+     1   1013:B1                 ora             c
+     1   1014:C20D10             jnz             @B
+     1                           ; Rom on, bank 2, user light off
+     1   1017:3E12               mvi     a,      ROM_ENABLE_BIT OR 2
+     1   1019:D302               out             02h
+     1   101B:1100F0             lxi     d,      0f000h
+     1   101E:010010             lxi     b,      1000h
+     1                   @@:
+     1   1021:1A                 ldax    d
+     1   1022:77                 mov             m,a
+     1   1023:13                 inx             d
+     1   1024:23                 inx             h
+     1   1025:0B                 dcx             b
+     1   1026:78                 mov             a,b
+     1   1027:B1                 ora             c
+     1   1028:C22110             jnz             @B
+     1                           ; ROM off, boot ROM off, select bank#0, user light off
+     1   102B:3E80               mvi             a,USER_LED_BIT
+     1   102D:D302               out             02h
+     1   102F:C300C0             jmp             DDT_START

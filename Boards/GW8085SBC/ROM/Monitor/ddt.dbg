@@ -1,0 +1,2686 @@
+CR		equ	0dh
+LF		equ	0ah
+SPACE		equ	020h
+BACKSPACE	equ	08h
+TAB		equ	09h
+retOpcode	equ	0c9h
+
+	org	0c000h
+ddtStart:
+	lxi	sp,stack
+	call	UartInit
+
+	lxi	h,mns05
+	call	printf
+	call	zeroMemory
+	call	TraceInit
+main:
+	;get a commandline from the user via the serial port and put into commandText
+	call	crlf
+
+	mvi	a,'-'
+	call	UartWrite
+
+	lxi	h,CommandText
+	call	getLine
+	call	parseParameters
+	call	ProcessCommand
+	jmp	main
+
+mns05:	db	'DDT (Dales debug Tool) for GW8085SBC (8085) v1.0', 0
+
+; input
+; hl - points to command buffer
+getLine:
+	push	h
+	mvi	b,0
+@@:
+	call	UartRead
+	cpi	CR
+	jz	gtl05
+	cpi	BACKSPACE
+	jz	gtl10
+
+	mov	m,a
+	inx	h
+	call	UartWrite
+	inr	b
+	jmp	@B
+gtl10:
+	mov	a,b
+	ora	a
+	jz	@B
+
+	dcr	b
+	dcx	h
+	mvi	a,BACKSPACE
+	call	UartWrite
+	jmp	@B
+gtl05:
+	xra	a
+	mov	m,a
+	pop	h
+	ret
+
+; Parse the command parameters
+; input
+; hl - points to command buffer
+parseParameters:
+	push	h
+	lxi	h,argv
+	lxi	b,(PARM_SIZE*5)
+@@:
+	mvi	m,0
+	inx	h
+	dcx	b
+	mov	a,b
+	ora	c
+	jnz	@B
+
+	pop	h
+	lxi	b,param1
+pp05:
+	push	b
+	call	scanToNonWS
+	mov	a,m
+	ora	a
+	jz	pp10
+@@:
+	mov	a,m
+	call	IsWS
+	jz	@F
+	stax	b
+	inx	h
+	inx	b
+	jmp	@B
+@@:
+	pop	b
+	push	h
+	lxi	h,PARM_SIZE
+	dad	b
+	push	h
+	pop	b
+	pop	h
+	jmp	pp05
+pp10:
+	pop	b
+	ret
+
+scanToNonWS:
+	mov	a,m
+	ora	a
+	rz
+	call	IsWS
+	rnz
+	inx	h
+	jmp	scanToNonWS
+
+
+; process the command in CommandText
+; input
+; hl - points to command buffer
+ProcessCommand:
+	lda	param1
+	ora	a
+	rz
+
+	call	FindCmd
+	mov	a,d
+	ora	e
+	jnz	@F
+	call	crlf
+	push	h
+	lxi	h,prcs05
+	call	printf
+	pop	h
+	ret
+@@:
+	call	crlf
+	lxi	b,prc05
+	push	b
+	xchg
+	push	h
+	lxi	h, param2
+prc05:
+	ret
+prcs05:	db	'Unrecognized Command', 0
+
+; find command in A
+; return command function pointer in DE
+FindCmd:
+	mov	l,a
+	lxi	b,cmdLetters
+	mvi	e,0
+@@:
+	ldax	b
+	cmp	l
+	jz	@F
+	inx	b
+	inr	e
+	mov	a,e
+	cpi	numLetters
+	jc	@B
+	lxi	h,0
+	ret
+@@:
+	lxi	h,cmdCode
+	mvi	d,0
+	dad	d
+	dad	d
+	mov	e,m
+	inx	h
+	mov	d,m
+	ret
+
+;cmdBufferGet:
+;	push	d
+;	push	h
+;	lxi	h,lastCommand
+;	lxi	d,commandText
+;@@:
+;	mov	a,m
+;	inx	h
+;	stax	d
+;	inx	d
+;	ora	a
+;	jz	@B
+;	pop	h
+;	pop	d
+;	ret
+;cmdBufferAdd:
+;	push	d
+;	push	h
+;	lxi	h,commandText
+;	lxi	d,lastCommand
+;@@:
+;	mov	a,m
+;	inx	h
+;	stax	d
+;	inx	d
+;	ora	a
+;	jz	@B
+;	pop	h
+;	pop	d
+;	ret
+
+zeroMemory:
+	lxi	h,ramStart
+	lxi	b,memorySize
+@@:
+	mvi	m,0
+	inx	h
+	dcx	b
+	mov	a,b
+	ora	c
+	jnz	@B
+	ret
+
+cmdLetters:	db	'd'
+		db	's'
+		db	'c'
+		db	'f'
+		db	'e'
+		db	'g'
+		db	'u'
+		db	'i'
+		db	'o'
+		db	'l'
+		db	'm'
+		db	'r'
+		db	't'
+		db	'x'
+		db	'y'
+;;		db	'z'			; test instructions
+numLetters	equ	$-cmdLetters
+
+cmdCode:	dw	Dump
+		dw	Search
+		dw	Compare
+		dw	Fill
+		dw	Enter
+		dw	Go
+		dw	Unassemble
+		dw	Input
+		dw	Output
+		dw	Load
+		dw	Move
+		dw	Registers
+		dw	Trace
+		dw	CPM
+		dw	TraceOver
+;;		dw	RegisterTest
+;RESET_65	equ	034h
+;JMP_INSTR	equ	0c3h
+
+UART_DATA_PORT		equ	00h
+UART_STATUS_PORT	equ	01h
+UART_TX_READY		equ	01h
+UART_RX_READY		equ	02h
+
+UartInit:
+	lxi	h,uart
+	mvi	c, UART_SIZE
+@@:
+	mov	a,m
+	out	UART_STATUS_PORT
+	inx	h
+	dcr	c
+	jnz	@B
+
+;	call	UartResetBuffer
+;	mvi	a,JMP_INSTR;
+;	sta	RESET_65
+;	lxi	h,UartRxInt
+;	shld	RESET_65+1
+;	lxi	h,rx_buffer
+;	mvi	a,0dh			; unmask rst 6.5 interrupt
+;	sim
+;	ei
+	ret
+uart:	db	0,0,0,40h,4eh,37h
+UART_SIZE	equ	$-uart
+
+;UartResetBuffer:
+;	push	h
+;	mvi	h,BUFFER_PAGE
+;	mvi	l,0
+;@@:
+;	mvi	m,0aah
+;	inx	h
+;	mov	a,l
+;	ora	a
+;	jnz	@B
+;	sta	rx_begin
+;	sta	rx_end
+;	pop	h
+;	ret
+;UartRxInt:
+;	push	psw
+;	push	h
+;	mvi	h,BUFFER_PAGE
+;	lda	rx_end
+;	mov	l,a
+;	in	UART_DATA_PORT
+;	mov	m,a
+;	inx	h
+;	mov	a,l
+;	sta	rx_end
+;	pop	h
+;	pop	psw
+;	ei
+;	ret
+
+UartStatus:
+UartStatusRx:
+	in	UART_STATUS_PORT
+	ani	UART_RX_READY
+	ret
+
+;UartStatusRx:
+;	push	b
+;	lda	rx_begin
+;	mov	b,a
+;	lda	rx_end
+;	cmp	b
+;	pop	b
+;	ret
+;UartRead:
+;	call	UartStatusRx
+;	jz	UartRead
+;	push	b
+;	push	h
+;	mvi	h,BUFFER_PAGE
+;	lda	rx_begin
+;	mov	l,a
+;	mov	b,m
+;	inx	h
+;	mov	a,l
+;	sta	rx_begin
+;	mov	a,b
+;	pop	h
+;	pop	b
+;	ret
+
+UartRead:
+	call	UartStatusRx
+	jz	UartRead
+	in	UART_DATA_PORT
+	ret
+
+UartWrite:
+	push	psw
+@@:
+	in	UART_STATUS_PORT
+	ani	UART_TX_READY
+	jz	@B
+	pop	psw
+	out	UART_DATA_PORT
+	ret
+
+
+;rx_begin:	db	0
+;rx_end:		db	0
+;BUFFER_PAGE	equ	(($+255)/ 256)
+;	org	BUFFER_PAGE*256
+;rx_buffer:	ds	256
+; returns length of null terminated string
+; hl - ptr to string
+; returns a: length of string
+strlen:
+	push	b
+	push	h
+	mvi	b,0
+strlen05:
+	mov	a,m
+	cpi	0
+	jz	strlen99
+	inx	h
+	inr	b
+	jmp	strlen05
+strlen99:
+	mov	a,b
+	pop	h
+	pop	b
+	ret
+
+; remove leading and traing whitespace from string
+strtrim:
+	push	b
+	push	h
+	push	psw
+strtrm05:
+	mov	a,m
+	ora	a
+	jz	strtrm10
+	call	IsWS
+	jnz	strtrm10
+	call	strRemove
+	jmp	strtrm05
+strtrm10:
+	call	strlen
+	ora	a
+	jz	strtrm99
+
+	push	h
+	call	strend
+	xchg
+	pop	h
+
+	dcx	d
+	ldax	d
+	call	IsWS
+	jnz	strtrm99
+	xra	a
+	stax	d
+	jmp	strtrm10
+strtrm99:
+	pop	psw
+	pop	h
+	pop	b
+	ret
+
+strRemove:
+	push	psw
+	push	h
+	push	d
+	push	h
+	pop	d
+	inx	d
+strrm05:
+	ldax	d
+	mov	m,a
+	inx	d
+	inx	h
+	ora	a
+	jnz	strrm05
+	pop	d
+	pop	h
+	pop	psw
+	ret
+
+; convert charcter to upper case
+upperCase:
+	cpi	'a'
+	jc	upc05
+	cpi	'z'+1
+	jnc	upc05
+	sui	020h
+upc05:
+	ret
+
+; convert charcter to lower case
+lowerCase:
+	cpi	'A'
+	jc	lwc05
+	cpi	'Z'
+	jnc	lwc05
+	adi	020h
+lwc05:
+	ret
+
+; locate end of string
+; hl - str1
+; output - hl - pointer to null terminating byte of str1
+strend:
+	push	d
+	call	strlen
+	mov	e,a
+	mvi	d,0
+	dad	d
+	pop	d
+	ret
+
+; convert string to binary
+; hl - pointer to string
+; output bc - value
+; carry - set: error
+char2bin:
+	push	h
+	lxi	b,0
+@@:
+	mov	a,m
+	ora	a
+	jz	@F
+	call	ascii2Bin
+	jc	@F
+
+	call	shlBC4
+	ani	0fh
+	ora	c
+	mov	c,a
+	inx	h
+	jmp	@B
+@@:
+	pop	h
+	ret
+
+ascii2Bin:
+	call	IsDigit
+	jc	@F
+	sui	'0'
+	ora	a
+	ret
+@@:
+	call	upperCase
+	call	IsHexLetter
+	rc
+	sui	'A'
+	adi	0ah
+	ora	a
+	ret
+
+; shift BC register left 4 bits.
+shlBC4:
+	push	d
+	mvi	e,4
+	call	shlBCe
+	pop	d
+	ret
+
+shlBCe:
+	push	psw
+	push	d
+shl05:
+	stc
+	cmc
+	mov	a,c
+	ral
+	mov	c,a
+	mov	a,b
+	ral
+	mov	b,a
+	dcr	e
+	jnz	shl05
+
+	pop	d
+	pop	psw
+	ret
+
+; Input
+;    hl: command with error
+cmdError:
+	push	h
+	lxi	h, errMsg1
+	call	printf
+	pop	h
+	call	printf
+	lxi	h, errMsg2
+	call	printf
+	call	crlf
+	ret
+errMsg1:	db	'Error in ', 0
+errMsg2:	db	' command', 0
+
+outPrompt:
+	mvi	a,'-'
+	jmp	UartWrite
+
+; print string to console
+; Input
+;   HL - string to print (null terminated)
+; Output
+;   HL byte past end of string
+printf:
+	mov	a,m
+	inx	h
+	ora	a
+	jnz	@F
+	ret
+@@:
+	call	UartWrite
+	jmp	printf
+
+outColon:
+	push	psw
+	mvi	a,':'
+	call	UartWrite
+	pop	psw
+	ret
+
+outSpace:
+	push	psw
+	mvi	a,' '
+	call	UartWrite
+	pop	psw
+	ret
+
+IsHexDigit:
+	call	IsDigit
+	rnc
+	call	IsHexLetter
+	ret
+IsDigit:
+	cpi	'0'
+	rc
+	cpi	'9'+1
+	cmc
+	ret
+IsHexLetter:
+	cpi	'A'
+	rc
+	cpi	'Z'
+	cmc
+	ret
+IsWS:
+	ora	a
+	rz
+	cpi	SPACE
+	rz
+	cpi	TAB
+	rz
+	cpi	CR
+	rz
+	cpi	LF
+	ret
+
+crlf:
+	push	psw
+	mvi	a,CR
+	call	UartWrite
+	mvi	a,LF
+	call	UartWrite
+	pop	psw
+	ret
+
+; hl has number
+dhexOut:
+	mov	a,h
+	call	hexOut
+	mov	a,l
+	call	hexOut
+	ret
+hexOut:
+	push	psw
+	push	b
+	mov	c,a
+	rar
+	rar
+	rar
+	rar
+	ani	0fh
+	call	nibbleToAscii
+	call	UartWrite
+	mov	a,c
+	ani	0fh
+	call	nibbleToAscii
+	call	UartWrite
+	pop	b
+	pop	psw
+	ret
+
+nibbleToAscii:
+	cpi		0ah
+	jc		@F
+	adi		07
+@@:
+	adi		30h
+	ret
+; dump memory
+; d [address] [length]
+; address - param2
+; length  - param3
+; if address not specified, use the last dump address
+; if length not specified, use length of 80h
+Dump:
+	lxi	h,param2
+	mov	a,m
+	ora	a
+	jnz	@F
+
+	lhld	lastDump
+	mvi	c,080h
+	call	dMemory
+	mvi	b,0
+	dad	b
+	shld	lastDump
+	ret
+@@:
+; address field entered
+	call	char2bin
+	jc	memoryError
+	push	b
+	pop	d			; de has address to dump
+
+	mvi	c,80h
+	lxi	h,param3
+	mov	a,m
+	ora	a
+	jz	@F
+
+; length field entered
+	call	char2bin
+	jc	memoryError
+@@:
+	push	d
+	pop	h
+	call	dMemory
+	mvi	b,0
+	dad	b
+	shld	lastDump
+dmp99:
+	ret
+memoryError:
+	lxi	h, dumpErrMsg
+	call	cmdError
+	ret
+dumpErrMsg:	db	'Dump', 0
+
+
+; dump memory hl number of bytes in c
+dMemory:
+	push	b
+	push	h
+
+	call	crlf
+	mov	e,c
+	mvi	d,0
+	xchg
+	dad	d
+	xchg
+@@:
+; hl - start address
+; de - end address
+; output the start address
+	call	dhexOut
+	call	outSpace
+
+	mvi	b,0
+	call	dmpLine
+	inr	b
+	call	dmpLine
+	call	crlf
+
+	push	d
+	mov	e,a
+	mvi	d,0
+	dad	d
+	pop	d
+
+; compare de and hl, check if start memory is at end or beyond end
+	call	dehlCmp
+	ora	a
+	jm	@B
+
+	pop	h
+	pop	b
+	ret
+
+; compare hl to de
+; return A 0ffh, if hl < de
+;        A +1  if hl > de
+;        A 0,  if hl == de
+dehlCmp:
+	mov	a,h
+	cmp	d
+	jnc	dehl05
+	mvi	a,0ffh
+	ret
+dehl05:
+	jz	dehl10
+	mvi	a,1
+	ret
+dehl10:
+	mov	a,l
+	cmp	e
+	jnc	dehl15
+	mvi	a,0ffh
+	ret
+dehl15:
+	jz	dehl20
+	mvi	a,1
+	ret
+dehl20:
+	xra	a
+	ret
+
+; Dump a line of memory to console
+; Input - hl address of memory to dump
+;         de last address to dump
+;         b - 0: print normal hex digits
+;           -+1: print ascii characters
+; 0120 __ __ __ xx xx xx xx xx xx xx xx xx xx xx xx xx  ................
+dmpLine:
+	push	b
+	push	d
+	push	h
+
+	mov	a,l
+	ani	0fh
+	jz	dmpl05
+	mov	c,a
+
+; output blanks to fill c hex positions
+	push	b
+dmpl10:
+	call	dmpSpace
+	dcr	c
+	jnz	dmpl10
+	pop	b
+dmpl05:
+	push	b
+	mov	a,l
+	ani	0fh
+	mov	b,a
+	mvi	a,16
+	sub	b
+	pop	b
+	mov	c,a
+	push	b
+dmpl15:
+	mov	a,b
+	ora	a
+	jz	dmpl20
+; convert to ascii and print
+	mov	a,m
+	inx	h
+	call	bin2ascii
+	call	UartWrite
+	jmp	dmpl25
+dmpl20:
+	mov	a,m
+	inx	h
+	call	hexOut
+	call	outSpace
+dmpl25:
+	dcr	c
+	jnz	dmpl15
+
+	pop	b
+	mov	a,c
+	pop	h
+	pop	d
+	pop	b
+	ret
+
+; input b : 0  normal hex digit (3 spaces)
+;       b : +1 asci space(1 space)
+dmpSpace:
+	push	psw
+	call	outSpace
+	mov	a,b
+	ora	a
+	jnz	dmps05
+	call	outSpace
+	call	outSpace
+dmps05:
+	pop	psw
+	ret
+
+; convert a binary numer to ascii char
+; return A '.' if not ascii
+bin2ascii:
+	cpi	' '
+	jc	b2a05
+	cpi	7fh
+	rc
+b2a05:
+	mvi	a,'.'
+	ret
+; move/copy a block of memory from a start address to destination address of length
+; move memory address address length
+; m ssss dddd llll
+; where ssss: start address
+;       dddd: destination address
+;       llll: length
+Move:
+	lxi	h,param2
+	ora	a
+	jz	moveMemoryError
+
+; source address in param2
+	call	char2bin
+	jc	moveMemoryError
+	push	b
+
+	lxi	h,param3
+	ora	a
+	jz	moveMemoryError
+	call	char2bin
+	jc	moveMemoryError
+	push	b
+
+	lxi	h,param4
+	ora	a
+	jz	moveMemoryError
+	call	char2bin
+	jc	moveMemoryError
+
+	pop	d		; dst address into de
+	pop	h		; src address into hl
+				; bc has length
+@@:
+	mov	a,m
+	stax	d
+	inx	h
+	inx	d
+	dcx	b
+	mov	a,b
+	ora	c
+	jnz	@B
+	ret
+moveMemoryError:
+	lxi	h, moveErrMsg
+	call	cmdError
+	ret
+moveErrMsg:	db	'Move', 0
+; compare 2 blocks of memory and dump result
+; c ssss dddd llll
+; where: ssss source address
+;      : dddd destination address
+;      : llll length of compare
+Compare:
+	lxi	h,param2
+	ora	a
+	jz	compareErrMsg
+
+; source address in param2
+	call	char2bin
+	jc	compareErrMsg
+	push	b
+
+	lxi	h,param3
+	ora	a
+	jz	compareErrMsg
+	call	char2bin
+	jc	compareErrMsg
+	push	b
+
+	lxi	h,param4
+	ora	a
+	jz	compareErrMsg
+	call	char2bin
+	jc	compareErrMsg
+
+	pop	d		; dst address into de
+	pop	h		; src address into hl
+				; bc has length
+cmp10:
+	ldax	d
+	cmp	m
+	jz	@F
+	call	prDiff
+@@:
+	inx	h
+	inx	b
+	dcx	b
+	mov	a,b
+	ora	c
+	jz	@B
+	ret
+
+; print difference between 2 bytes and their address
+; hl - address of byte1
+; bc address byte 2
+prDiff:
+	push	b
+	push	d
+	push	h
+
+	call	dhexOut
+	call	outSpace
+	mov	a,m
+	call	hexOut
+	call	outSpace
+	ldax	b
+	call	hexOut
+	call	outSpace
+
+	mov	l,c
+	mov	h,b
+	call	dhexOut
+	call	crlf
+
+	pop	h
+	pop	d
+	pop	b
+	ret
+
+compareMemoryError:
+	lxi	h,compareErrMsg
+	call	cmdError
+	ret
+compareErrMsg:	db	'Compare', 0
+
+; search a block of memory for a single value.
+; s ssss llll value
+; where: ssss source address
+;      : llll length of compare
+;      : value value to search for
+Search:
+	lxi	h,param2
+	ora	a
+	jz	searchMemoryError
+
+; source address in param2
+	call	char2bin
+	jc	searchMemoryError
+	push	b
+
+	lxi	h,param3
+	ora	a
+	jz	searchMemoryError
+	call	char2bin
+	jc	searchMemoryError
+	push	b
+
+	lxi	h,param4
+	ora	a
+	jz	searchMemoryError
+	call	char2bin
+	jc	searchMemoryError
+
+	pop	h		; hl has address
+	pop	d		; de has length
+				; c value to seach for.
+@@:
+	mov	a,m
+	cmp	c
+	jnz	@F
+	call	prSrchDiff
+@@:
+	inx	h
+	dcx	d
+	mov	a,d
+	ora	e
+	jz	@B
+	ret
+
+; print a search find
+; hl - address of byte
+prSrchDiff:
+	call	dhexOut
+	call	crlf
+	ret
+
+searchMemoryError:
+	lxi	h,searchErrMsg
+	call	cmdError
+	ret
+searchErrMsg:	db	'Search', 0
+
+; fill memory with a single byte
+; f ssss llll value
+; where: ssss source address
+;      : llll length of fill
+;      : value is a gingle byte fill value
+Fill:
+	lxi	h,param2
+	ora	a
+	jz	fillMemoryError
+
+; source address in param2
+	call	char2bin
+	jc	fillMemoryError
+	push	b
+
+	lxi	h,param3
+	ora	a
+	jz	fillMemoryError
+	call	char2bin
+	jc	fillMemoryError
+	push	b
+
+	lxi	h,param4
+	ora	a
+	jz	fillMemoryError
+	call	char2bin
+	jc	fillMemoryError
+
+	pop	d		; length in de
+	pop	h		; start address into hl
+				; c has value
+@@:
+	mov	m, c
+	inx	h
+	dcx	d
+	mov	a,d
+	ora	e
+	jnz	@B
+	ret
+fillMemoryError:
+	lxi	h, fillErrMsg
+	call	cmdError
+	ret
+fillErrMsg:	db	'Fill', 0
+; unassemble instructions
+; u [address] [length]
+Unassemble:
+	lxi	h,param2
+	mov	a,m
+	ora	a
+	jnz	@F
+
+	lhld	lastUnassemble
+	mvi	c,32
+	call	uCode
+	mvi	b,0
+	dad	b
+	shld	lastUnassemble
+	ret
+@@:
+;something entered after u command
+;u 1200 [length] (if no length use 32
+	call	char2bin
+	jc	unassembleError
+
+	push	b
+	lxi	h,param3
+	mov	a,m
+	ora	a
+	mvi	c,32
+	jz	@F
+
+	call	char2bin
+	jc	unassembleError
+@@:
+	pop	h
+	call	uCode
+	mvi	b,0
+	dad	b
+	shld	lastUnassemble
+una99:
+	ret
+
+unassembleError:
+	lxi	h,unassembleErrMsg
+	call	printf
+	call	crlf
+	ret
+unassembleErrMsg:	db	'Error in Unassemble command',0
+
+;hl: address to start unassemble
+;c: length in bytes
+uCode:
+	push	b
+	push	d
+	push	h
+@@:
+	call	unAssembleLine
+	mov	e,a
+	mvi	d,0
+	dad	d
+	mov	e,a
+	mov	a,c
+	sub	e
+	mov	c,a
+	jnc	@B
+ucde99:
+	pop	h
+	pop	d
+	pop	b
+	ret
+
+;convert opcode to assembler string and print to console
+;Input:	hl: address to unassemble
+;Output: a: number of bytes used
+unAssembleLine:
+	push	b
+	push	h
+	shld	opCodePtr
+	mov	e,m
+	mvi	d,0
+	lxi	h,unasmTable
+	dad	d
+	mov	c,m
+	mvi	b,0
+	mvi	e,3
+	call	shlBCe
+	lxi	h,opCodeTypes
+	dad	b
+
+; hl points to opcode in table opCodeTypes
+	push	h
+	lxi	d,7
+	dad	d
+	mov	a,m
+	sta	numBytes
+	mov	c,a
+	mvi	a,3
+	sub	c
+	mov	d,a
+
+	lhld	opCodePtr
+	call	dhexOut
+	call	outSpace
+@@:
+	mov	a,m
+	call	hexOut
+	inx	h
+	dcr	c
+	jnz	@B
+@@:
+	mov	a,d
+	ora	a
+	jz	@F
+	call	outSpace
+	call	outSpace
+	dcr	d
+	jmp	@B
+@@:
+	call	outSpace
+	pop	h
+
+	mvi	c,5
+@@:
+	mov	a,m
+	call	UartWrite
+	inx	h
+	dcr	c
+	jnz	@B
+
+	shld	opCodeTablePtr
+	push	h
+	inx	h
+	inx	h
+	mov	a,m
+	sta	numBytes
+	pop	h
+	mov	a,m
+	cpi	ARGNONE
+	jz	unasl99
+	lxi	h,unasl99
+	push	h
+	lhld	opCodePtr
+	cpi	ARGDATA8
+	cz	argData8s
+	cpi	ARGREG8S
+	cz	argReg8Ss
+	cpi	ARGREG8D
+	cz	argReg8Ds
+	cpi	ARGREG16
+	cz	argReg16s
+	cpi	ARGDATA16
+	cz	argData16s
+	cpi	ARGRST
+	cz	argRSTINSTR
+	pop	h
+
+	lhld	opCodeTablePtr
+	inx	h
+	mov	a,m
+	cpi	ARGNONE
+	jz	unasl99
+
+	lxi	h,unasl99
+	push	h
+	lhld	opCodePtr
+	mov	e,a
+	mvi	a,','
+	call	UartWrite
+	mov	a,e
+	cpi	ARGDATA16
+	cz	argData16s
+	cpi	ARGDATA8
+	cz	argData8s
+	cpi	ARGREG8S
+	cz	argReg8Ss
+	cpi	ARGREG8D
+	cz	argReg8Ds
+	pop	h
+unasl99:
+	call	crlf
+	lda	numBytes
+	pop	h
+	pop	b
+	ret
+
+
+
+
+argRSTINSTR:
+	push	psw
+	mov	a,m
+	rar
+	rar
+	rar
+	ani	07h
+	call	nibbleToAscii
+	call	UartWrite
+	pop	psw
+	ret
+
+argReg8Ds:
+	push	psw
+	mov	a,m
+	rar
+	rar
+	rar
+	ani	07h
+	mov	e,a
+	mvi	d,0
+	lxi	h,sreg2
+	dad	d
+	mov	a,m
+	call	UartWrite
+	pop	psw
+	ret
+
+argReg8Ss:
+	push	psw
+	mov	a,m
+	ani	07h
+	mov	e,a
+	mvi	d,0
+	lxi	h,sreg2
+	dad	d
+	mov	a,m
+	call	UartWrite
+	pop	psw
+	ret
+sreg2:	db	'bcdehlma'
+
+; 00RP0011
+; where RP 00-b
+;          01 d
+;          10 h
+;          11 sp
+argReg16s:
+	push	psw
+	mov	a,m
+	rar
+	rar
+	rar
+	rar
+	mov	b,a
+	ani	03h
+	cpi	03h
+	jnz	ar1605
+
+	mov	a,b
+	rar
+	rar
+	ani	03h
+	lxi	h,spStr
+	jz	ar1603
+	lxi	h,pswStr
+ar1603:
+	call	printf
+	pop	psw
+	ret
+ar1605:
+	mov	e,a
+	mvi	d,0
+	lxi	h,mydreg
+;;	dad	d
+	dad	d
+	mov	a,m
+	call	UartWrite
+	pop	psw
+	ret
+mydreg:	db	'bdhsp'
+
+argData16s:
+	push	psw
+	inx	h
+	mov	e,m
+	inx	h
+	mov	d,m
+	xchg
+	call	dHexOut
+	pop	psw
+	ret
+
+argData8s:
+	push	psw
+	inx	h
+	mov	a,m
+	call	hexOut
+	pop	psw
+	ret
+spStr:	db	's','p',0
+pswStr:	db	'p','s','w',0
+ARGNONE		equ	0
+ARGDATA8	equ	1
+ARGREG8D	equ	2
+ARGREG8S	equ	3
+ARGDATA16	equ	4
+ARGREG16	equ	5
+ARGRST		equ	6
+
+; Input a opcode
+; Output
+; Z - set if yes
+;    clear if no
+IsCallJmp:
+	call	IsCall
+	rz
+	call	IsJmp
+	ret
+
+IsCall:
+	cpi	0cdh
+	rz
+	mov	b,a
+	ani	0c7h
+	cpi	0c4h
+	jnz	iscl05
+	xra	a
+iscl05:
+	mov	a,b
+	ret
+IsJmp:
+	cpi	0c3h
+	rz
+	mov	b,a
+	ani	0c7h
+	cpi	0c2h
+	jnz	isjp05
+	xra	a
+isjp05:
+	mov	a,b
+	ret
+
+; Input a opcode
+; Output
+; Z - set if yes
+;    clear if no
+IsReturn:
+	cpi	0c9h
+	rz
+	mov	b,a
+	ani	0c7h
+	cpi	0c0h
+	jnz	isrt05
+	xra	a
+isrt05:
+	mov	a,b
+	ret
+
+; a opcode
+; Output
+; c: number of bytes for this opcode
+numBytesOpcode:
+	push	psw
+	push	d
+	push	h
+
+	mov	e,a
+	mvi	d,0
+	lxi	h,unasmTable
+	dad	d
+	mov	c,m
+	mvi	b,0
+	mvi	e,3
+	call	shlBCe
+	lxi	h,opCodeTypes
+	dad	b
+	lxi	d,7
+	dad	d
+	mov	c,m
+
+	pop	h
+	pop	d
+	pop	psw
+	ret
+
+unasmTable:
+	db	0		;nop			;0x00
+	db	1		;Lxi
+	db	2		;stax	b
+	db	3		;inx	b
+	db	4		;inr	b
+	db	21		;dcr	b
+	db	5		;mvi	b,data
+	db	6		;rlc
+	db	80		; dsub *** undocumented opcode
+	db	7		;dad	b
+	db	16		;ldax	b
+	db	20		;dcx	b
+	db	4		;inr	c
+	db	21		;dcr	c
+	db	5		;mvi	c,data
+	db	8		;rrc
+	db	81		; arhl *** undocumented opcode			;0x10
+	db	1		;lxi	d,data
+	db	2		;stax	d
+	db	3		;inx	d
+	db	4		;inr	d
+	db	21		;dcr	d
+	db	5		;mvi	d,data
+	db	9		;ral
+	db	88		; rdel *** undocumented opcode			;0x18
+	db	7		;dad	d
+	db	16		;ldax	d
+	db	20		;dcx	d
+	db	4		;inr	e
+	db	21		;dcr	e
+	db	5		;mvi	e,data
+	db	10		;rar
+	db	11		;rim			;0x20
+	db	1		;lxi	h,data
+	db	12		;shld	addr
+	db	3		;inx	h
+	db	4		;inr	h
+	db	21		;dcr	h
+	db	5		;mvi	h,data
+	db	13		;daa
+	db	84		; ldhi *** undocumented opcode			;0x28
+	db	7		;dad	h
+	db	14		;lhld	addr
+	db	20		;dcx	h
+	db	4		;inr	l
+	db	21		;dcr	l
+	db	5		;mvi	l,data
+	db	15		;cma
+	db	17		;sim			;0x30
+	db	1		;lxi	sp,data
+	db	79		;sta	addr
+	db	3		;inx	sp
+	db	4		;inr	m
+	db	21		;dcr	m
+	db	5		;mvi	m,data
+	db	18		;stc
+	db	85		; ldsi *** undocumented opcode			;0x38
+	db	7		;dad	sp
+	db	19		;lda	addr
+	db	20		;dcx	sp
+	db	4		;inr	a
+	db	21		;dcr	a
+	db	5		;mvi	a,data
+	db	22		;cmc
+	db	23		;mov	b,b		;0x40
+	db	23		;mov	b,c
+	db	23		;mov	b,d
+	db	23		;mov	b,e
+	db	23		;mov	b,h
+	db	23		;mov	b,l
+	db	23		;mov	b,m
+	db	23		;mov	b,a
+	db	23		;mov	c,b
+	db	23		;mov	c,c
+	db	23		;mov	c,d
+	db	23		;mov	c,e
+	db	23		;mov	c,h
+	db	23		;mov	c,l
+	db	23		;mov	c,m
+	db	23		;mov	c,a
+	db	23		;mov	d,b		;0x50
+	db	23		;mov	d,c
+	db	23		;mov	d,d
+	db	23		;mov	d,e
+	db	23		;mov	d,h
+	db	23		;mov	d,l
+	db	23		;mov	d,m
+	db	23		;mov	d,a
+	db	23		;mov	e,b
+	db	23		;mov	e,c
+	db	23		;mov	e,d
+	db	23		;mov	e,e
+	db	23		;mov	e,h
+	db	23		;mov	e,l
+	db	23		;mov	e,m
+	db	23		;mov	e,a
+	db	23		;mov	h,b		;0x60
+	db	23		;mov	h,c
+	db	23		;mov	h,d
+	db	23		;mov	h,e
+	db	23		;mov	h,h
+	db	23		;mov	h,l
+	db	23		;mov	h,m
+	db	23		;mov	h,a
+	db	23		;mov	l,b
+	db	23		;mov	l,c
+	db	23		;mov	l,d
+	db	23		;mov	l,e
+	db	23		;mov	l,h
+	db	23		;mov	l,l
+	db	23		;mov	l,m
+	db	23		;mov	l,a
+	db	23		;mov	m,b		;0x70
+	db	23		;mov	m,c
+	db	23		;mov	m,d
+	db	23		;mov	m,e
+	db	23		;mov	m,h
+	db	23		;mov	m,l
+	db	24		;hlt
+	db	23		;mov	m,a
+	db	23		;mov	a,b
+	db	23		;mov	a,c
+	db	23		;mov	a,d
+	db	23		;mov	a,e
+	db	23		;mov	a,h
+	db	23		;mov	a,l
+	db	23		;mov	a,m
+	db	23		;mov	a,a
+	db	25		;add	b		;0x80
+	db	25		;add	c
+	db	25		;add	d
+	db	25		;add	e
+	db	25		;add	h
+	db	25		;add	l
+	db	25		;add	m
+	db	25		;add	a
+	db	26		;adc	b
+	db	26		;adc	c
+	db	26		;adc	d
+	db	26		;adc	e
+	db	26		;adc	h
+	db	26		;adc	l
+	db	26		;adc	m
+	db	26		;adc	a
+	db	27		;sub	b		;0x90
+	db	27		;sub	c
+	db	27		;sub	d
+	db	27		;sub	e
+	db	27		;sub	h
+	db	27		;sub	l
+	db	27		;sub	m
+	db	27		;sub	a
+	db	28		;sbb	b
+	db	28		;sbb	c
+	db	28		;sbb	d
+	db	28		;sbb	e
+	db	28		;sbb	h
+	db	28		;sbb	l
+	db	28		;sbb	m
+	db	28		;sbb	a
+	db	29		;ana	b		;0xa0
+	db	29		;ana	c
+	db	29		;ana	d
+	db	29		;ana	e
+	db	29		;ana	h
+	db	29		;ana	l
+	db	29		;ana	m
+	db	29		;ana	a
+	db	30		;xra	b
+	db	30		;xra	c
+	db	30		;xra	d
+	db	30		;xra	e
+	db	30		;xra	h
+	db	30		;xra	l
+	db	30		;xra	m
+	db	30		;xra	a
+	db	31		;ora	b		;0xb0
+	db	31		;ora	c
+	db	31		;ora	d
+	db	31		;ora	e
+	db	31		;ora	h
+	db	31		;ora	l
+	db	31		;ora	m
+	db	31		;ora	a
+	db	32		;cmp	b
+	db	32		;cmp	c
+	db	32		;cmp	d
+	db	32		;cmp	e
+	db	32		;cmp	h
+	db	32		;cmp	l
+	db	32		;cmp	m
+	db	32		;cmp	a
+	db	34		;rnz			;0xc0
+	db	42		;pop	b	
+	db	44		;jnz	addr
+	db	43		;jmp	addr
+	db	53		;cnz	addr
+	db	61		;push	b
+	db	62		;adi	data
+	db	70		;rst	0
+	db	35		;rz
+	db	33		;ret
+	db	45		;jz	addr
+	db	89		; rstv *** undocumented opcode			;0xcb
+	db	54		;cz	addr
+	db	52		;call	addr
+	db	63		;aci	data
+	db	70		;rst	1
+	db	36		;rnc			;0xd0
+	db	42		;pop	d
+	db	46		;jnc	addr
+	db	71		;out	data
+	db	55		;cnc	addr
+	db	61		;push	d
+	db	64		;sui	data
+	db	70		;rst	2
+	db	37		;rc
+	db	87		; shlx *** undocumented opcode			;0xd9
+	db	47		;jc	addr
+	db	72		;in	data
+	db	56		;cc	addr
+	db	82		; jnk *** undocumented opcode			;0xdd
+	db	65		;sbi	data
+	db	70		;rst	3
+	db	39		;rpo			;0xe0
+	db	42		;pop	h
+	db	49		;jpo	addr
+	db	73		;xthl
+	db	58		;cpo	addr
+	db	61		;push	h
+	db	66		;ani	data
+	db	70		;rst	4
+	db	38		;rpe
+	db	74		;pchl
+	db	48		;jpe	addr
+	db	76		;xchg
+	db	57		;cpe	addr
+	db	86		; lhlx *** undocumented opcode			;0xed
+	db	67		;xri	data
+	db	70		;rst	5
+	db	41		;rp			;0xf0
+	db	42		;pop	psw
+	db	51		;jp	addr
+	db	77		;di
+	db	60		;cp	addr
+	db	61		;push	psw
+	db	68		;ori	data
+	db	70		;rst	6
+	db	40		;rm
+	db	75		;sphl
+	db	50		;jm	addr
+	db	78		;ei
+	db	59		;cm	addr
+	db	83		; jk *** undocumented opcode			;0xfd
+	db	69		;cpi	data
+	db	70		;rst	7
+numops	equ	$-unasmTable
+
+opCodeTypes:
+	db	'Nop  ', ARGNONE,	ARGNONE,	1		; 0
+	db	'Lxi  ', ARGREG16,	ARGDATA16,	3		; 1
+	db	'Stax ', ARGREG16,	ARGNONE,	1		; 2
+	db	'Inx  ', ARGREG16,	ARGNONE,	1		; 3
+	db	'Inr  ', ARGREG8D,	ARGNONE,	1		; 4
+	db	'Mvi  ', ARGREG8D,	ARGDATA8,	2		; 5
+	db	'Rlc  ', ARGNONE,	ARGNONE,	1		; 6
+	db	'Dad  ', ARGREG16,	ARGNONE,	1		; 7
+	db	'Rrc  ', ARGNONE,	ARGNONE,	1		; 8
+	db	'Ral  ', ARGNONE,	ARGNONE,	1		; 9
+	db	'Rar  ', ARGNONE,	ARGNONE,	1		; 10
+	db	'Rim  ', ARGNONE,	ARGNONE,	1		; 11
+	db	'Shld ', ARGDATA16,	ARGNONE,	3		; 12
+	db	'Daa  ', ARGNONE,	ARGNONE,	1		; 13
+	db	'Lhld ', ARGDATA16,	ARGNONE,	3		; 14
+	db	'Cma  ', ARGNONE,	ARGNONE,	1		; 15
+	db	'Ldax ', ARGREG16,	ARGNONE,	1		; 16
+	db	'Sim  ', ARGNONE,	ARGNONE,	1		; 17
+	db	'Stc  ', ARGNONE,	ARGNONE,	1		; 18
+	db	'Lda  ', ARGDATA16,	ARGNONE,	3		; 19
+	db	'Dcx  ', ARGREG16,	ARGNONE,	1		; 20
+	db	'Dcr  ', ARGREG8D,	ARGNONE,	1		; 21
+	db	'Cmc  ', ARGNONE,	ARGNONE,	1		; 22
+	db	'Mov  ', ARGREG8D,	ARGREG8S,	1		; 23
+	db	'Hlt  ', ARGNONE,	ARGNONE,	1		; 24
+	db	'Add  ', ARGREG8S,	ARGNONE,	1		; 25
+	db	'Adc  ', ARGREG8S,	ARGNONE,	1		; 26
+	db	'Sub  ', ARGREG8S,	ARGNONE,	1		; 27
+	db	'Sbb  ', ARGREG8S,	ARGNONE,	1		; 28
+	db	'Ana  ', ARGREG8S,	ARGNONE,	1		; 29
+	db	'Xra  ', ARGREG8S,	ARGNONE,	1		; 30
+	db	'Ora  ', ARGREG8S,	ARGNONE,	1		; 31
+	db	'Cmp  ', ARGREG8S,	ARGNONE,	1		; 32
+	db	'Ret  ', ARGNONE,	ARGNONE,	1		; 33
+	db	'Rnz  ', ARGNONE,	ARGNONE,	1		; 34
+	db	'Rz   ', ARGNONE,	ARGNONE,	1		; 35
+	db	'Rnc  ', ARGNONE,	ARGNONE,	1		; 36
+	db	'Rc   ', ARGNONE,	ARGNONE,	1		; 37
+	db	'Rpe  ', ARGNONE,	ARGNONE,	1		; 38
+	db	'Rpo  ', ARGNONE,	ARGNONE,	1		; 39
+	db	'Rm   ', ARGNONE,	ARGNONE,	1		; 40
+	db	'Rp   ', ARGNONE,	ARGNONE,	1		; 41
+	db	'Pop  ', ARGREG16,	ARGNONE,	1		; 42
+	db	'Jmp  ', ARGDATA16,	ARGNONE,	3		; 43
+	db	'Jnz  ', ARGDATA16,	ARGNONE,	3		; 44
+	db	'Jz   ', ARGDATA16,	ARGNONE,	3		; 45
+	db	'Jnc  ', ARGDATA16,	ARGNONE,	3		; 46
+	db	'Jc   ', ARGDATA16,	ARGNONE,	3		; 47
+	db	'Jpe  ', ARGDATA16,	ARGNONE,	3		; 48
+	db	'Jpo  ', ARGDATA16,	ARGNONE,	3		; 49
+	db	'Jm   ', ARGDATA16,	ARGNONE,	3		; 50
+	db	'Jp   ', ARGDATA16,	ARGNONE,	3		; 51
+	db	'Call ', ARGDATA16,	ARGNONE,	3		; 52
+	db	'Cnz  ', ARGDATA16,	ARGNONE,	3		; 53
+	db	'Cz   ', ARGDATA16,	ARGNONE,	3		; 54
+	db	'Cnc  ', ARGDATA16,	ARGNONE,	3		; 55
+	db	'Cc   ', ARGDATA16,	ARGNONE,	3		; 56
+	db	'Cpe  ', ARGDATA16,	ARGNONE,	3		; 57
+	db	'Cpo  ', ARGDATA16,	ARGNONE,	3		; 58
+	db	'Cm   ', ARGDATA16,	ARGNONE,	3		; 59
+	db	'Cp   ', ARGDATA16,	ARGNONE,	3		; 60
+	db	'Push ', ARGREG16,	ARGNONE,	1		; 61
+	db	'Adi  ', ARGDATA8,	ARGNONE,	2		; 62
+	db	'Aci  ', ARGDATA8,	ARGNONE,	2		; 63
+	db	'Sui  ', ARGDATA8,	ARGNONE,	2		; 64
+	db	'Sbi  ', ARGDATA8,	ARGNONE,	2		; 65
+	db	'Ani  ', ARGDATA8,	ARGNONE,	2		; 66
+	db	'Xri  ', ARGDATA8,	ARGNONE,	2		; 67
+	db	'Ori  ', ARGDATA8,	ARGNONE,	2		; 68
+	db	'Cpi  ', ARGDATA8,	ARGNONE,	2		; 69
+	db	'Rst  ', ARGRST,	ARGNONE,	1		; 70
+	db	'Out  ', ARGDATA8,	ARGNONE,	2		; 71
+	db	'In   ', ARGDATA8,	ARGNONE,	2		; 72
+	db	'Xthl ', ARGNONE,	ARGNONE,	1		; 73
+	db	'Pchl ', ARGNONE,	ARGNONE,	1		; 74
+	db	'Sphl ', ARGNONE,	ARGNONE,	1		; 75
+	db	'Xchg ', ARGNONE,	ARGNONE,	1		; 76
+	db	'Di   ', ARGNONE,	ARGNONE,	1		; 77
+	db	'Ei   ', ARGNONE,	ARGNONE,	2		; 78
+	db	'Sta  ', ARGDATA16,	ARGNONE,	3		; 79
+	db	'Dsub ', ARGNONE,	ARGNONE,	1		; 80
+	db	'Arhl ', ARGNONE,	ARGNONE,	1		; 81
+	db	'Jnk  ', ARGDATA16,	ARGNONE,	3		; 82
+	db	'Jk   ', ARGDATA16,	ARGNONE,	3		; 83
+	db	'Ldhi ', ARGDATA8,	ARGNONE,	2		; 84
+	db	'Ldsi ', ARGDATA8,	ARGNONE,	2		; 85
+	db	'Lhlx ', ARGNONE,	ARGNONE,	1		; 86
+	db	'Shlx ', ARGNONE,	ARGNONE,	1		; 87
+	db	'Rdel ', ARGNONE,	ARGNONE,	1		; 88
+	db	'Rstv ', ARGNONE,	ARGNONE,	1		; 89
+; Display register values/set values including flags
+; r [reg][flag] [value]
+; where reg: bc,de,hl,sp,pc
+;         or a,b,c,d,e,h,l
+;       value: 16 bit number for double registers
+;               8 bit number for single registers
+;               0 or 1 for flags
+Registers:
+	lxi	h,param2
+	mov	a,m
+	ora	a
+	jz	DumpRegisters
+@@:
+;; how many characters in param2?
+	mvi	c,-1
+@@:
+	inr	c
+	mov	a,m
+	inx	h
+	call	IsWS
+	jnz	@B
+
+	mov	a,c
+	cpi	1
+	jz	SingleRegisterOrFlag
+	cpi	2
+	jz	DoubleRegister
+registersError:
+	lxi	h, regErrMsg
+	call	printf
+	call	crlf
+	ret
+regErrMsg:	db	'Error in Registers command', 0
+
+DoubleRegister:
+	lxi	h,param2
+	call	IsDoubleRegister
+	rc
+
+	lxi	h,param3
+	call	char2bin
+	rc
+	mov	a,c
+	stax	d
+	inx	d
+	mov	a,b
+	stax	d
+	xra	a
+	ret
+
+; check if the double register specified at (hl) is a double register
+; Input: (hl):
+;		double register in ascii in text buffer to check
+; Output: c
+;         1 nope
+;         0 yes
+IsDoubleRegister:
+	lxi	h,param2
+	mov	a,m
+	call	upperCase
+	mov	b,a
+	inx	h
+	mov	a,m
+	call	upperCase
+	mov	c,a
+
+	mvi	l,0
+	lxi	d,dreg
+@@:
+	ldax	d
+	ora	a
+	rz
+
+	push	d
+	ldax	d
+	cmp	b
+	jnz	isdr10
+	inx	d
+	ldax	d
+	cmp	c
+	jz	@F
+isdr10:
+	inr	l
+	pop	d
+	inx	d
+	inx	d
+	jmp	@B
+@@:
+	pop	d
+	lxi	d,RegisterFile
+	mvi	h,0
+	dad	h
+	dad	d
+	xchg
+	xra	a
+	ret
+dreg:	db	'BCDEHLSPPC', 0
+numdreg	equ	5
+
+; handle a single register or flag operation
+SingleRegisterOrFlag:
+	lda	param2
+	ora	a
+	rz
+	call	IsSingleReg
+	jnc	SingleRegister
+	jmp	Flag
+
+; input a - reg to test
+; output:
+;        carry  1 nope
+;               0 yes
+;        hl ptr into register 
+IsSingleReg:
+	call	upperCase
+	lxi	h,sreg
+	mov	c,a
+	mvi	b,0
+@@:
+	mov	a,m
+	ora	a
+	stc
+	rz
+
+	cmp	c
+	jz	@F
+	inr	b
+	inx	h
+	jmp	@B
+@@:
+	mov	e,b
+	mvi	d,0
+	lxi	h,sRegisterLookup
+	dad	d
+	mov	e,m
+	mvi	d,0
+	lxi	h,RegisterFile
+	dad	d
+	xra	a
+issr99:
+	ret
+sreg:	db	'BCDEHLA', 0
+sRegisterLookup:
+	db	1		; B
+	db	0		; C
+	db	3		; D
+	db	2		; E
+	db	5		; H
+	db	4		; L
+	db	11		; A
+
+; hl - points to register file
+SingleRegister:
+	push	h
+	lxi	h,param3
+	call	char2bin
+	pop	h
+	mov	m,c
+	ret
+
+; flag sepecified on command line
+; r [flag] [value]
+; where flag: I, S, Z, P ,C
+;       value is 0 or 1
+Flag:
+	lda	param2
+	call	IsFlag
+	rc
+
+;	ldax	d		; get bit of flag
+;	mov	b,a
+	lda	param3
+	cpi	'0'
+	jz	flg05
+	cpi	'1'
+	jz	flg10
+	ret
+flg05:
+	mov	a,d
+	cma
+	mov	d,a
+	lda	savFgs
+	ana	d
+	sta	savFgs
+	ret
+flg10:
+	lda	savFgs
+	ora	d
+	sta	savFgs
+	ret
+
+
+; check if this is a valid flag
+; input   a:     flag to check
+; output  carry: 1 nope
+;                0 all good
+;         d:     bit pattern of flag
+IsFlag:
+	call	upperCase
+	lxi	h,flags
+	mov	b,a
+@@:
+	mov	a,m
+	ora	a
+	stc
+	rz
+
+	cmp	b
+	jz	@F
+
+	inx	h
+	inx	h
+	jmp	@B
+@@:
+	inx	h
+	mov	d,m
+	xra	a
+	ret
+flags:	db	'S', 80h		; Sign
+	db	'Z', 40h		; Zero
+	db	'K', 20h		; K flag
+	db	'A', 10h		; aux carry
+	db	'P', 04h		; parity
+	db	'V', 02h		; overflow
+	db	'Y', 01h		; carry
+	db	0
+
+DumpRegisters:
+	call	crlf
+	call	dumpDoubleRegisters
+	call	dumpPsw
+	call	crlf
+	call	dumpSingleRegisters
+	call	dumpFlags
+	lhld	savPC
+	push	h
+	call	unAssembleLine
+	pop	h
+	shld	lastUnassemble
+	ret
+
+dumpFlags:
+	lxi	h,flags
+@@:
+	mov	a,m
+	ora	a
+	jz	@F
+	call	UartWrite
+	inx	h
+	mov	b,m
+	inx	h
+	mvi	c,'1'
+	lda	savFgs
+	ana	b
+	jnz	nfzero
+	mvi	c,'0'
+nfzero:
+	mov	a,c
+	call	UartWrite
+	call	outSpace
+	jmp	@B
+@@:
+	call	crlf
+	ret
+
+dumpDoubleRegisters:
+	push	h
+	lxi	h,dreg
+	mvi	c,numdreg
+	lxi	d,RegisterFile
+drg10:
+	mov	a,m
+	call	UartWrite
+	inx	h
+	mov	a,m
+	call	UartWrite
+	inx	h
+	mvi	a,'='
+	call	UartWrite
+	ldax	d
+	push	h
+	mov	l,a
+	inx	d
+	ldax	d
+	mov	h,a
+	inx	d
+	call	dhexOut
+	call	outSpace
+	pop	h
+	dcr	c
+	jnz	drg10
+	pop	h
+	ret
+
+dumpPsw:
+	push	h
+	lxi	h,pswText
+	call	printf
+	mvi	a,'='
+	call	UartWrite
+	lhld	savFgs
+	call	dhexOut
+	pop	h
+	ret
+pswText:	db	'PSW' ,0
+
+;RegisterFile
+dumpSingleRegisters:
+	push	b
+	push	d
+	push	h
+	lxi	d,sreg
+	mvi	c,0
+@@:
+	ldax	d
+	ora	a
+	jz	@F
+
+	call	UartWrite
+	mvi	a,'='
+	call	UartWrite
+	mvi	b,0
+	lxi	h,sRegisterLookup
+	dad	b
+
+	push	b
+	mov	c,m
+	mvi	b,0
+	lxi	h,RegisterFile
+	dad	b
+	pop	b
+
+	mov	a,m
+	call	hexOut
+	call	outSpace
+	inr	c
+	inx	d
+	jmp	@B
+@@:
+	pop	h
+	pop	d
+	pop	b
+	ret
+
+
+; load a hex file from the console into memory
+Load:
+	lxi	h,0ffffh
+	shld	startHex
+	lxi	h,ldwaitMsg
+	call	printf
+	call	crlf
+@@:
+	call	ldGetline
+	ora	a
+	jnz	@B
+
+	lhld	startHex
+	shld	savPC
+	shld	lastUnassemble
+	ret
+ldwaitMsg:	db	'Waiting for hex file upload ....', 0
+
+;; set the load start address if it has not been set yet.
+; Input HL - address to set
+setStart:
+	push	h
+	lhld	startHex
+	inx	h
+	mov	a,h
+	ora	l
+	pop	h
+	rnz
+	shld	startHex
+	ret
+
+;;;;  :10DC0000C35CDFC358DF7F00436F70797269676858
+;;;;:0000000000
+; get 1 line of the hex file
+; Output
+; a: more bytes to get 0 if no
+;                      1 if yes
+ldGetline:
+	call	UartRead
+	cpi	':'
+	jnz	ldGetline
+
+	mvi	a,'.'
+	call	UartWrite
+
+	call	ldGetByte
+	ora	a
+	jnz	hxgt10
+; end of file reached, eat the last line
+	call	ldGetByte
+	call	ldGetByte
+	call	ldGetByte
+	call	ldGetByte
+	xra	a
+	ret
+hxgt10:
+	mov	c,a				; length
+	call	ldGetByte
+	mov	h,a
+	call	ldGetByte
+	mov	l,a
+	call	setStart
+	call	ldGetByte			; discard
+hxgt05:
+	call	ldGetByte
+	mov	m,a
+	inx	h
+	dcr	c
+	jnz	hxgt05
+	call	ldGetByte			; checksum
+	mvi	a,1
+	ret
+
+ldGetByte:
+	push	b
+	push	h
+	lxi	h,commandText
+	push	h
+	call	UartRead
+	mov	m,a
+	inx	h
+	call	UartRead
+	mov	m,a
+	inx	h
+	mvi	m,0
+	pop	h
+	call	char2bin
+	mov	a,c
+	pop	h	
+	pop	b
+	ret
+RST3:		equ	018h
+RST3INSTR:	equ	0dfh
+JMPINSTR:	equ	0c3h
+
+TraceInit:
+	lxi	h,RST3
+	mvi	m,JMPINSTR
+	inx	h
+	lxi	d,Int3Vector
+	mov	m,e
+	inx	h
+	mov	m,d
+	ret
+
+TraceOver:
+	lhld	savPC
+	mov	a,m
+	jmp	trc05
+
+Trace:
+	lhld	savPC
+	mov	a,m
+	call	IsCallJmp
+	jnz	trc05
+	push	h
+	inx	h
+	mov	e,m
+	inx	h
+	mov	d,m
+	call	addBP
+	pop	h
+trc05:
+	call	IsReturn
+	jnz	trc10
+
+; set breakpoint at return address
+	push	h
+	lhld	savSP
+	mov	e,m
+	inx	h
+	mov	d,m
+	call	addBP
+	pop	h
+trc10:
+	call	numBytesOpcode
+	mvi	b,0
+	dad	b
+	xchg
+	call	addBP
+	call	TraceInit
+	lxi	h,0
+	dad	sp
+	shld	userSP
+	jmp	Restore
+trc99:
+	lhld	userSP
+	sphl
+	;remove all break points
+	call	restoreBPS
+	call	DumpRegisters
+	ret
+
+Restore:
+	lxi	sp,RegisterFile
+	pop	b
+	pop	d
+	lxi	sp,savFgs
+	pop	psw
+	lhld	savSP
+	sphl
+	lhld	savPC
+	push	h
+	lhld	savHL
+	ret
+
+Int3Vector:
+	shld	savHL
+	pop	h
+	dcx	h
+	shld	savPC
+	push	psw
+	pop	h
+	shld	savFgs
+	lxi	h,0
+	dad	sp
+	shld	savSP
+
+	mov	l,c
+	mov	h,b
+	shld	RegisterFile
+	mov	l,e
+	mov	h,d
+	shld	RegisterFile+2
+	jmp	trc99
+
+; restore all break points
+restoreBPS:
+	lda	numBreakPt
+	ora	a
+	rz
+	mov	c,a
+	lxi	h,breakPtAddr
+	lxi	d,breakPtByte
+revb05:
+	push	b
+	mov	c,m
+	inx	h
+	mov	b,m
+	inx	h
+
+	ldax	d
+	inx	d
+	stax	b
+	pop	b
+	dcr	c
+	jnz	revb05
+	xra	a
+	sta	numBreakPt
+revb99:
+	ret
+
+clearBP:
+	xra	a
+	sta	numBreakPt
+	ret
+
+; de address
+addBP:
+	push	d
+
+	ldax	d
+	mov	c,a
+	mvi	a,RST3INSTR		; rst 3 instruction
+	stax	d
+
+	lda	numBreakPt
+	ral
+	mov	e,a
+	mvi	d,0
+	lxi	h,breakPtAddr
+	dad	d
+	pop	d
+
+	mov	m,e
+	inx	h
+	mov	m,d
+
+	lda	numBreakPt
+	mov	e,a
+	mvi	d,0
+	lxi	h,breakPtByte
+	dad	d
+	mov	m,c
+	inr	a
+	sta	numBreakPt
+	ret
+inOpcode	equ	0dbh
+outOpcode	equ	0d3h
+
+; i port
+; input from port and put into a
+Input:
+	lxi	h,param2
+	mov	a,m
+	ora	a
+	jz	ioError
+
+	call	char2bin
+	jc	ioError
+
+	lxi	h,dynInOutCmd
+	mvi	m,inOpcode
+	inx	h
+	mov	m,c
+	inx	h
+	mvi	m,retOpcode
+
+	call	dynInOutCmd
+	call	hexOut
+	ret
+
+; o port [data]
+; output the data value(6 bit) to port
+; if data not specified, use register a
+Output:
+	lxi	h,param2
+	mov	a,m
+	ora	a
+	jz	ioError
+
+	call	char2bin
+	jc	ioError
+	lxi	h,dynInOutCmd
+	mvi	m,outOpcode
+	inx	h
+	mov	m,c
+	inx	h
+	mvi	m,retOpcode
+
+	lxi	h,param3
+	mov	a,m
+	ora	a
+	jz	@F
+
+	call	char2bin
+	jc	ioError
+	mov	a,c
+@@:
+	jmp	dynInOutCmd
+
+ioError:
+	lxi	h, ioErrMsg
+	call	cmdError
+	ret
+ioErrMsg:	db	'IO', 0
+; e address
+Enter:
+	lxi	h,param2
+	mov	a,m
+	ora	a
+	jz	enterError
+
+	call	char2bin
+	jc	enterError
+
+	mov	l,c
+	mov	h,b
+	call	dhexOut
+@@:
+	call	outSpace
+	mov	a,m
+	call	hexOut
+	mvi	a,'.'
+	call	UartWrite
+
+; bc has address to enter data into
+	push	h
+	call	getByte2
+	pop	h
+	mov	m,c
+	inx	h
+	mov	a,e
+	cpi	' '
+	jz	@B
+	ret
+
+getByte2:
+	lxi	h,CommandText
+	push	h
+@@:
+	call	UartRead
+	call	upperCase
+	call	IsHexDigit
+	jc	@B
+	mov	m,a
+	inx	h
+	call	UartWrite
+@@:
+	call	UartRead
+	call	upperCase
+	call	IsHexDigit
+	jc	@B
+	mov	m,a
+	inx	h
+	call	UartWrite
+
+	call	UartRead
+	mov	m,a
+	mov	e,a
+	pop	h
+	call	char2bin
+	ret
+enterError:
+	lxi	h, enterErrMsg
+	call	cmdError
+	ret
+enterErrMsg:	db	'Enter', 0
+;;;MAX_BPT		equ	8
+; g [address] [address] [address] ...
+Go:
+	call	clearBP
+	lxi	h,param2
+	mov	a,m
+	ora	a
+	jz	Restore
+	call	char2bin
+	jc	goError
+
+	push	b
+	pop	h
+	shld	savPC
+
+	lxi	h,param3
+@@:
+	mov	a,m
+	ora	a
+	jz	Restore
+	call	char2bin
+	jc	goError
+
+	mov	l,c
+	mov	h,b
+	call	addBP
+
+	lxi	d,PARM_SIZE
+	dad	d
+	jmp	@B
+goError:
+	lxi	h,goErrMsg
+	call	cmdError
+	ret
+goErrMsg:	db	'Go', 0
+
+CCP		equ	0E000h		; CCP is 2K
+BDOS		equ	0E800h		; BDOS is 6K
+TEMPM		equ	04000h
+
+CPM:
+	lxi	h,cpmMessage1
+	call	printf
+
+	mvi	a,13h				; activate ROM, select bank#3
+	out	02h
+	lxi		h,0f000h
+	lxi		d,CCP
+	lxi		b,0800h
+	call		moveMem
+
+	mvi		a,14h			; activate ROM, select bank#3
+	out		02h
+	lxi		h,0f000h
+	lxi		d,BDOS
+	lxi		b,1000h
+	call		moveMem
+
+	mvi		a,15h			; activate ROM, select bank#5
+	out		02h
+	lxi		h,0f000h
+	lxi		b,0800h
+	call		moveMem
+
+	mvi		a,00H			; turn off ROM
+	out		02h
+
+	lxi		h,cpmMessage2
+	call		printf
+	mvi		c,0
+	jmp		BDOS
+
+; Copy memory
+; Input
+;    HL source
+;    DE destination
+;	 BC size
+moveMem:
+	push	b
+	push	d
+	push	h
+	lxi		d,TEMPM
+@@:
+	mov		a,m
+	stax	d
+	inx		d
+	inx		h
+	dcx		b
+	mov		a,b
+	ora		c
+	jnz		@b
+
+	pop		h
+	pop		d
+	pop		b
+
+	push	b
+	push	h
+	lxi		h,TEMPM
+	mvi		a,0
+	out		02
+@@:
+	mov		a,m
+	stax	d
+	inx		d
+	inx		h
+	dcx		b
+	mov		a,b
+	ora		c
+	jnz		@b
+
+	pop		b
+	pop		h
+	ret
+cpmMessage1:	db	'loading CPM 2.2 ...', CR, LF, 0
+cpmMessage2:	db	'Warm booting CPM ...', 0
+;;;	include SRegisterTest.asm
+
+ramStart	equ	$
+commandText:	ds	32
+
+PARM_SIZE	equ	16
+argv:
+param1:		ds	PARM_SIZE
+param2:		ds	PARM_SIZE
+param3:		ds	PARM_SIZE
+param4:		ds	PARM_SIZE
+param5:		ds	PARM_SIZE
+
+dynInOutCmd:
+		ds		1
+		ds		1
+		ds		1
+userSP:		ds		2
+
+MAXBPT			equ	8
+numBreakPt:		ds	1
+breakPtAddr:	ds	MAXBPT*2
+breakPtByte:	ds	MAXBPT
+lastdump:		ds	2
+regEdit:		ds	1
+opCodePtr:		ds	2
+opCodeTablePtr:	ds	2
+numBytes:	ds	1
+lastUnassemble:	ds	2
+startHex:	ds	2
+RegisterFile:
+		ds	1		; C
+		ds	1		; B
+		ds	1		; E
+		ds	1		; D
+savHL:		ds	1		; L
+		ds	1		; H
+savSP:		ds	2		; SP
+savPC:		ds	2		; PC
+savFgs:		ds	1		; Flags
+		ds	1		; A
+intMask:	ds	1		; Interupt Mask (RIM)
+
+; Z80 ram variables.
+bittim		ds	2
+halfbt		ds	2
+
+
+memorySize	equ	$-ramStart
+		ds	512
+stack:
+	end

@@ -1,0 +1,212 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{3C2508DE-BE87-47A8-B426-E37D8C0F4EF9}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>GW8085SBC</RootNamespace>
+    <AssemblyName>GW8085SBC</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Design" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Controls\GWTerminalPanel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\GWTerminalPanel.Designer.cs">
+      <DependentUpon>GWTerminalPanel.cs</DependentUpon>
+    </Compile>
+    <Compile Include="GW8085SBCBoard.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="GW8085BoardConfig.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Parsers\Parsers.csproj">
+      <Project>{16892b76-fd08-4374-8421-d4d1259218c3}</Project>
+      <Name>Parsers</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Preferences\Preferences.csproj">
+      <Project>{ec33e25a-a6c8-4257-bd97-6b55ca65e12e}</Project>
+      <Name>Preferences</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Processors\Processors\Processors.csproj">
+      <Project>{11d61a7e-4ac5-4a6a-9b2a-a626066e528c}</Project>
+      <Name>Processors</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Boards.csproj">
+      <Project>{cdc65fac-f3e2-475a-a82f-819b1ab8947c}</Project>
+      <Name>Boards</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Terminal\Terminal.csproj">
+      <Project>{eac783f2-6264-4d4e-951c-006ec609c72a}</Project>
+      <Name>Terminal</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="BDS-C\bin\--BDSC-1.60C" />
+    <None Include="BDS-C\bin\-LBR.NOT" />
+    <None Include="BDS-C\bin\-READ.ME" />
+    <None Include="BDS-C\bin\BDSCPAT.LBR" />
+    <None Include="BDS-C\bin\C.CCC" />
+    <None Include="BDS-C\bin\C.SUB" />
+    <None Include="BDS-C\bin\CC.COM" />
+    <None Include="BDS-C\bin\CC2.COM" />
+    <None Include="BDS-C\bin\CCONFIG.COM" />
+    <None Include="BDS-C\bin\CLIB.COM" />
+    <None Include="BDS-C\bin\CLINK.COM" />
+    <None Include="BDS-C\bin\CRCK.COM" />
+    <None Include="BDS-C\bin\CRCK.DOC" />
+    <None Include="BDS-C\bin\CRCKLST1.CRC" />
+    <None Include="BDS-C\bin\DEFF.CRL" />
+    <None Include="BDS-C\bin\DEFF2.CRL" />
+    <None Include="BDS-C\bin\EXAMPLES.LBR" />
+    <None Include="BDS-C\bin\FILES.DOC" />
+    <None Include="BDS-C\bin\LASM.com" />
+    <None Include="BDS-C\bin\LBREXT.COM" />
+    <None Include="BDS-C\bin\LDIR.COM" />
+    <None Include="BDS-C\bin\SOURCES.LBR" />
+    <None Include="BDS-C\bin\UNCRUNCH.COM" />
+    <None Include="BDS-C\bin\ZCASM.LBR" />
+    <None Include="BDS-C\Original\bdsc-all.zip" />
+    <None Include="BDS-C\Original\bdsc-src.zip" />
+    <None Include="BDS-C\Source\CC.bin" />
+    <None Include="BDS-C\Source\CC.dle" />
+    <None Include="BDS-C\Source\CC.hex" />
+    <None Include="BDS-C\Source\CC.prn" />
+    <None Include="BDS-C\Source\CC2.bin" />
+    <None Include="BDS-C\Source\CC2.dle" />
+    <None Include="BDS-C\Source\CC2.hex" />
+    <None Include="BDS-C\Source\CC2.prn" />
+    <None Include="BDS-C\Source\CLINK.bin" />
+    <None Include="BDS-C\Source\CLINK.dle" />
+    <None Include="BDS-C\Source\CLINK.hex" />
+    <None Include="BDS-C\Source\CLINK.prn" />
+    <None Include="BDS-C\Source\CPMResults\CC.PRN" />
+    <None Include="BDS-C\Source\CPMResults\CC.SYM" />
+    <None Include="BDS-C\Source\CPMResults\CC2.PRN" />
+    <None Include="BDS-C\Source\CPMResults\CC2.SYM" />
+    <None Include="BDS-C\Source\CPMResults\CLINK.PRN" />
+    <None Include="BDS-C\Source\CPMResults\CLINK.SYM" />
+    <None Include="BDS-C\Source\LASM.com" />
+    <None Include="Docs\8085.pdf" />
+    <None Include="Docs\8085_sbc-master\8085_sbc_rev1\schem.brd" />
+    <None Include="Docs\8085_sbc-master\8085_sbc_rev1\schem.sch" />
+    <None Include="Docs\8085_sbc-master\8085_sbc_rev2\DESCRIPTION" />
+    <None Include="Docs\8085_sbc-master\8085_sbc_rev2\fp-info-cache" />
+    <None Include="Docs\8085_sbc-master\8085_sbc_rev2\schem.brd" />
+    <None Include="Docs\8085_sbc-master\8085_sbc_rev2\schem.pro" />
+    <None Include="Docs\8085_sbc-master\8085_sbc_rev2\schem.sch" />
+    <None Include="Docs\8086history.doc" />
+    <None Include="Docs\an0154.pdf" />
+    <None Include="Docs\AS6C62256 23 March 2016 rev1.2-1288423.pdf" />
+    <None Include="Docs\BDS C Compiler.pdf" />
+    <None Include="Docs\cd74hc175.pdf" />
+    <None Include="Docs\CH376DS1.pdf" />
+    <None Include="Docs\Ch376msc-master.zip" />
+    <None Include="Docs\debug_tutorial.pdf" />
+    <None Include="Docs\DS1233-1389125.pdf" />
+    <None Include="Docs\ds8251.pdf" />
+    <None Include="Docs\gw-8085sbc-3_manual.pdf" />
+    <None Include="Docs\max232.pdf" />
+    <None Include="Docs\sn74ls688.pdf" />
+    <None Include="Docs\sn74ls85.pdf" />
+    <None Include="Docs\spra803.pdf" />
+    <None Include="Docs\x28hc256.pdf" />
+    <None Include="Docs\z80.pdf" />
+    <None Include="ROM\Monitor\BDOS.dbg" />
+    <None Include="ROM\Monitor\BDOS.prn" />
+    <None Include="ROM\Monitor\boot.prn" />
+    <EmbeddedResource Include="Controls\GWTerminalPanel.resx">
+      <DependentUpon>GWTerminalPanel.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ROM\Monitor\CCP.bin" />
+    <EmbeddedResource Include="ROM\Monitor\bootImage.bin" />
+    <None Include="ROM\Monitor\CCP.dbg" />
+    <None Include="ROM\Monitor\CCP.prn" />
+    <None Include="ROM\Monitor\ddt.dbg" />
+    <None Include="ROM\Monitor\ddt.prn" />
+    <None Include="ROM\Tools\putty-64bit-0.70-installer.msi" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="BDS-C\bin\CHARIO.C" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="BDS-C\Original\STDIO.H" />
+    <Content Include="CPM\download.asm" />
+    <Content Include="ROM\Monitor\main.asm" />
+    <Content Include="ROM\Monitor\ram.asm" />
+    <None Include="ROM\Monitor\BDOS.ASM" />
+    <None Include="ROM\Monitor\boot.asm" />
+    <None Include="ROM\Monitor\CCP.ASM" />
+    <None Include="ROM\Monitor\compare.asm" />
+    <None Include="ROM\Monitor\cpm.asm" />
+    <None Include="ROM\Monitor\ddt.asm" />
+    <None Include="ROM\Monitor\dump.asm" />
+    <None Include="ROM\Monitor\enter.asm" />
+    <None Include="ROM\Monitor\fill.asm" />
+    <None Include="ROM\Monitor\go.asm" />
+    <None Include="ROM\Monitor\io.asm" />
+    <None Include="ROM\Monitor\load.asm" />
+    <None Include="ROM\Monitor\move.asm" />
+    <None Include="ROM\Monitor\Opcode.asm" />
+    <None Include="ROM\Monitor\registers.asm" />
+    <None Include="ROM\Monitor\sdcard.asm" />
+    <None Include="ROM\Monitor\SRegisterTest.asm" />
+    <None Include="ROM\Monitor\strings.asm" />
+    <None Include="ROM\Monitor\trace.asm" />
+    <None Include="ROM\Monitor\uart.asm" />
+    <None Include="ROM\Monitor\unassemble.asm" />
+    <None Include="Docs\pulseview-NIGHTLY-64bit-static-release-installer %281%29.exe" />
+    <None Include="BDS-C\Source\CC.ASM" />
+    <None Include="BDS-C\Source\CC2.ASM" />
+    <None Include="BDS-C\Source\CC2L.ASM" />
+    <None Include="BDS-C\Source\CC2SLR.ASM" />
+    <None Include="BDS-C\Source\CCL.ASM" />
+    <None Include="BDS-C\Source\CLINK.ASM" />
+    <None Include="BDS-C\Source\CLINKA.ASM" />
+    <None Include="BDS-C\Source\CLINKB.ASM" />
+    <None Include="BDS-C\Source\CLINKL.ASM" />
+    <None Include="BDS-C\Source\test.c" />
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>copy $(TargetDir)$(TargetFileName) $(SolutionDir)$(OutDir)
+copy $(TargetDir)$(TargetName).pdb $(SolutionDir)$(OutDir)</PostBuildEvent>
+  </PropertyGroup>
+</Project>

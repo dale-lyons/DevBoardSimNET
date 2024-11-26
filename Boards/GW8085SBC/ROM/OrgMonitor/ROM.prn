@@ -1,0 +1,424 @@
+     1                   ;GWMON-80 v0.1.1 for 8080/8085/Z80 and Compatibles 
+     1                   ;Copyright (c) 2018 The Glitch Works
+     1                   ;http://www.glitchwrks.com
+     1                   ;
+     1                   ;See LICENSE included in the project root for licensing
+     1                   ;information.
+     1                   ;
+     1                   ;*** STOP! THIS CODE WILL NOT RUN BY ITSELF! ***
+     1                   ;
+     1                   ;This is the base monitor. Consult README for information
+     1                   ;on including the I/O module specific to your system.
+     1                   CTLPRT  equ 01H
+     1                   DATPRT  equ 00H
+     1                           ORG 0f000h
+     1   F000:C303F0             jmp     (setup or 0f000h)
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;SETUP -- Prepare the system for running the
+     1                   ;   monitor
+     1                   ;
+     1                   ;pre: none
+     1                   ;post: stack and console are initialized
+     1                   ;post: ROM boot circuit is switched off
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F003:3E10       SETUP:  MVI A, 010H             ; Turn off ROM at 0x0000
+     1   F005:D302               OUT 02H
+     1   F007:3100E0             LXI SP, 0E000H
+     1   F00A:217BF2             LXI H, INIUART
+     1   F00D:0606               MVI B, 06H              ; length of ini string
+     1   F00F:7E         INURT:  MOV A, M
+     1   F010:D301               OUT CTLPRT
+     1   F012:23                 INX H
+     1   F013:05                 DCR B
+     1   F014:C20FF0             JNZ INURT
+     1   F017:C31AF0             JMP SE1
+     1                   ;Initialization and sign-on message
+     1   F01A:21EBF1     SE1:    LXI H, LOGMSG
+     1   F01D:CD7FF1             CALL STROUT
+     1   F020:2181F2             LXI H, MSG$
+     1   F023:CD7FF1             CALL STROUT
+     1                   ;Main command loop
+     1   F026:2143F2     CMDLP:  LXI H, PROMPT
+     1   F029:CD7FF1             CALL STROUT
+     1   F02C:2126F0             LXI H, CMDLP        ; Get CMDLP address in HL
+     1   F02F:E5                 PUSH H              ; Push HL, prime stack for RET to CMDLP
+     1   F030:CD67F2             CALL CIN
+     1   F033:E65F               ANI 5Fh
+     1   F035:FE44               CPI 'D'
+     1   F037:CABAF0             JZ MEMDMP
+     1   F03A:FE45               CPI 'E'
+     1   F03C:CA7CF0             JZ EDMEM
+     1   F03F:FE47               CPI 'G'
+     1   F041:CAB1F0             JZ GO
+     1   F044:FE4F               CPI 'O'
+     1   F046:CA59F0             JZ OUTPUT
+     1   F049:FE49               CPI 'I'
+     1   F04B:CA6AF0             JZ INPUT
+     1   F04E:FE4C               CPI 'L'
+     1   F050:CA9CF1             JZ LOAD
+     1   F053:2148F2             LXI H, ERR$
+     1   F056:CD8AF1             CALL ERROUT
+     1                   ;Get a port address, write byte out
+     1   F059:CD79F1     OUTPUT: CALL SPCOUT
+     1   F05C:CD38F1             CALL GETHEX
+     1   F05F:47                 MOV B, A
+     1   F060:CD79F1             CALL SPCOUT
+     1   F063:CD38F1             CALL GETHEX
+     1   F066:CD60F1             CALL JMPOUT
+     1   F069:C9                 RET
+     1                   ;Input from port, print contents
+     1   F06A:CD79F1     INPUT:  CALL SPCOUT
+     1   F06D:CD38F1             CALL GETHEX
+     1   F070:47                 MOV B, A
+     1   F071:CD79F1             CALL SPCOUT
+     1   F074:78                 MOV A, B
+     1   F075:CD66F1             CALL JMPIN
+     1   F078:CD06F1             CALL HEXOUT
+     1   F07B:C9                 RET
+     1                   ;Edit memory from a starting address until X is
+     1                   ;pressed. Display mem loc, contents, and results
+     1                   ;of write.
+     1   F07C:CD79F1     EDMEM:  CALL SPCOUT
+     1   F07F:CD2FF1             CALL ADRIN
+     1   F082:62                 MOV H, D
+     1   F083:6B                 MOV L, E
+     1   F084:3E0D       ED1:    MVI A, 13
+     1   F086:CD6DF2             CALL COUT
+     1   F089:3E0A               MVI A, 10
+     1   F08B:CD6DF2             CALL COUT
+     1   F08E:CD26F1             CALL ADROUT
+     1   F091:CD79F1             CALL SPCOUT
+     1   F094:3E3A               MVI A, ':'
+     1   F096:CD6DF2             CALL COUT
+     1   F099:CD79F1             CALL SPCOUT
+     1   F09C:CD01F1             CALL DMPLOC
+     1   F09F:CD79F1             CALL SPCOUT
+     1   F0A2:CD38F1             CALL GETHEX
+     1   F0A5:D8                 RC
+     1   F0A6:77                 MOV M, A
+     1   F0A7:CD79F1             CALL SPCOUT
+     1   F0AA:CD01F1             CALL DMPLOC
+     1   F0AD:23                 INX H
+     1   F0AE:C384F0             JMP ED1
+     1                   ;Get an address and jump to it
+     1   F0B1:CD79F1     GO:     CALL SPCOUT
+     1   F0B4:CD2FF1             CALL ADRIN
+     1   F0B7:62                 MOV H, D
+     1   F0B8:6B                 MOV L, E
+     1   F0B9:E9                 PCHL
+     1                   ;Dump memory between two address locations
+     1   F0BA:CD79F1     MEMDMP: CALL SPCOUT
+     1   F0BD:CD2FF1             CALL ADRIN
+     1   F0C0:62                 MOV H, D
+     1   F0C1:6B                 MOV L, E
+     1   F0C2:0E10               MVI C, 10h
+     1   F0C4:CD79F1             CALL SPCOUT
+     1   F0C7:CD2FF1             CALL ADRIN
+     1   F0CA:3E0D       MD1:    MVI A, 13
+     1   F0CC:CD6DF2             CALL COUT
+     1   F0CF:3E0A               MVI A, 10
+     1   F0D1:CD6DF2             CALL COUT
+     1   F0D4:CDE8F0             CALL DMP16
+     1   F0D7:7A                 MOV A, D
+     1   F0D8:BC                 CMP H
+     1   F0D9:F8                 RM
+     1   F0DA:7B                 MOV A, E
+     1   F0DB:BD                 CMP L
+     1   F0DC:FAE2F0             JM MD2
+     1   F0DF:C3CAF0             JMP MD1
+     1   F0E2:7A         MD2:    MOV A, D
+     1   F0E3:BC                 CMP H
+     1   F0E4:C2CAF0             JNZ MD1
+     1   F0E7:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;DMP16 -- Dump 16 consecutive memory locations
+     1                   ;
+     1                   ;pre: HL pair contains starting memory address
+     1                   ;post: memory from HL to HL + 16 printed
+     1                   ;post: HL incremented to HL + 16
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F0E8:CD26F1     DMP16:  CALL ADROUT
+     1   F0EB:CD79F1             CALL SPCOUT
+     1   F0EE:3E3A               MVI A, ':'
+     1   F0F0:CD6DF2             CALL COUT
+     1   F0F3:0E10               MVI C, 10h
+     1   F0F5:CD79F1     DM1:    CALL SPCOUT
+     1   F0F8:CD01F1             CALL DMPLOC
+     1   F0FB:23                 INX H
+     1   F0FC:0D                 DCR C
+     1   F0FD:C8                 RZ
+     1   F0FE:C3F5F0             JMP DM1
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;DMPLOC -- Print a byte at HL to console
+     1                   ;
+     1                   ;pre: HL pair contains address of byte
+     1                   ;post: byte at HL printed to console
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F101:7E         DMPLOC: MOV A, M
+     1   F102:CD06F1             CALL HEXOUT
+     1   F105:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;HEXOUT -- Output byte to console as hex
+     1                   ;
+     1                   ;pre: A register contains byte to be output
+     1                   ;post: byte is output to console as hex
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F106:C5         HEXOUT: PUSH B
+     1   F107:47                 MOV B, A
+     1   F108:0F                 RRC
+     1   F109:0F                 RRC
+     1   F10A:0F                 RRC
+     1   F10B:0F                 RRC
+     1   F10C:E60F               ANI 0Fh
+     1   F10E:CD1FF1             CALL HEXASC
+     1   F111:CD6DF2             CALL COUT
+     1   F114:78                 MOV A, B
+     1   F115:E60F               ANI 0Fh
+     1   F117:CD1FF1             CALL HEXASC
+     1   F11A:CD6DF2             CALL COUT
+     1   F11D:C1                 POP B
+     1   F11E:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;HEXASC -- Convert nybble to ASCII char
+     1                   ;
+     1                   ;pre: A register contains nybble
+     1                   ;post: A register contains ASCII char
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F11F:C690       HEXASC: ADI 90h
+     1   F121:27                 DAA
+     1   F122:CE40               ACI 40h
+     1   F124:27                 DAA
+     1   F125:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;ADROUT -- Print an address to the console
+     1                   ;
+     1                   ;pre: HL pair contains address to print
+     1                   ;post: HL printed to console as hex
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F126:7C         ADROUT: MOV A, H
+     1   F127:CD06F1             CALL HEXOUT
+     1   F12A:7D                 MOV A, L
+     1   F12B:CD06F1             CALL HEXOUT
+     1   F12E:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;ADRIN -- Get an address word from console
+     1                   ;
+     1                   ;pre: none
+     1                   ;post: DE contains address from console
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F12F:CD38F1     ADRIN:  CALL GETHEX
+     1   F132:57                 MOV D, A
+     1   F133:CD38F1             CALL GETHEX
+     1   F136:5F                 MOV E, A
+     1   F137:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;GETHEX -- Get byte from console as hex
+     1                   ;
+     1                   ;pre: none
+     1                   ;post: A register contains byte from hex input
+     1                   ;post: Carry flag set if X was received
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F138:D5         GETHEX: PUSH D
+     1   F139:CD67F2             CALL CIN
+     1   F13C:FE58               CPI 'X'
+     1   F13E:CA52F1             JZ GE2
+     1   F141:CD56F1             CALL ASCHEX
+     1   F144:07                 RLC
+     1   F145:07                 RLC
+     1   F146:07                 RLC
+     1   F147:07                 RLC
+     1   F148:57                 MOV D, A
+     1   F149:CD67F2             CALL CIN
+     1   F14C:CD56F1             CALL ASCHEX
+     1   F14F:B2                 ORA D
+     1   F150:D1         GE1:    POP D
+     1   F151:C9                 RET
+     1   F152:37         GE2:    STC
+     1   F153:C350F1             JMP GE1
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;ASCHEX -- Convert ASCII coded hex to nybble
+     1                   ;
+     1                   ;pre: A register contains ASCII coded nybble
+     1                   ;post: A register contains nybble
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F156:D630       ASCHEX: SUI 30h
+     1   F158:FE0A               CPI 0Ah
+     1   F15A:F8                 RM
+     1   F15B:E65F               ANI 5Fh
+     1   F15D:D607               SUI 07h
+     1   F15F:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;JMPOUT -- Output to a dynamic port
+     1                   ;
+     1                   ;pre: B register contains the port to output to
+     1                   ;pre: A register contains the byte to output
+     1                   ;post: byte is output
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F160:0ED3       JMPOUT: MVI C, 0D3h
+     1   F162:CD6DF1             CALL GOBYT
+     1   F165:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;JMPIN -- Input from a dynamic port
+     1                   ;
+     1                   ;pre: A register contains the port to input from
+     1                   ;post: A register contains port value
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F166:0EDB       JMPIN:  MVI C, 0DBh
+     1   F168:47                 MOV B, A
+     1   F169:CD6DF1             CALL GOBYT
+     1   F16C:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;GOBYT -- Push a two-byte instruction and RET
+     1                   ;         and jump to it
+     1                   ;
+     1                   ;pre: B register contains operand
+     1                   ;pre: C register contains opcode
+     1                   ;post: code executed, returns to caller
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F16D:210000     GOBYT:  LXI H, 0000
+     1   F170:39                 DAD SP
+     1   F171:2B                 DCX H
+     1   F172:36C9               MVI M, 0C9h
+     1   F174:2B                 DCX H
+     1   F175:70                 MOV M, B
+     1   F176:2B                 DCX H
+     1   F177:71                 MOV M, C
+     1   F178:E9                 PCHL
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;SPCOUT -- Print a space to the console
+     1                   ;
+     1                   ;pre: none
+     1                   ;post: 0x20 printed to console
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F179:3E20       SPCOUT: MVI A, ' '
+     1   F17B:CD6DF2             CALL COUT
+     1   F17E:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;STROUT -- Print a null-terminated string
+     1                   ;
+     1                   ;pre: HL contains pointer to start of a null-
+     1                   ;     terminated string
+     1                   ;post: string at HL printed to console
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F17F:7E         STROUT: MOV A, M
+     1   F180:FE00               CPI 00
+     1   F182:C8                 RZ
+     1   F183:CD6DF2             CALL COUT
+     1   F186:23                 INX H
+     1   F187:C37FF1             JMP STROUT
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;ERROUT -- Print a null-terminated error string
+     1                   ;
+     1                   ;pre: HL contains pointer to start of a null-
+     1                   ;     terminated string
+     1                   ;post: string at HL printed to console
+     1                   ;post: program execution returned to command loop
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F18A:CD91F1     ERROUT: CALL CRLF
+     1   F18D:CD7FF1             CALL STROUT
+     1   F190:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;CRLF -- Print a CR, LF
+     1                   ;
+     1                   ;pre: none
+     1                   ;post: CR, LF printed to console
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F191:3E0D       CRLF:   MVI A, 13
+     1   F193:CD6DF2             CALL COUT
+     1   F196:3E0A               MVI A, 10
+     1   F198:CD6DF2             CALL COUT
+     1   F19B:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;LOAD -- Load an Intel HEX file from console
+     1                   ;
+     1                   ;post: Intel HEX file loaded, or error printed
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F19C:CD91F1     LOAD:   CALL CRLF       ; Newline
+     1   F19F:CD5DF2     LOAD1:  CALL CINNE
+     1   F1A2:FE3A               CPI ':'
+     1   F1A4:C29FF1             JNZ LOAD1       ; Wait for start colon
+     1   F1A7:CD6DF2             CALL COUT
+     1   F1AA:CD38F1             CALL GETHEX     ; Get record length
+     1   F1AD:47                 MOV B, A        ; Record length in B
+     1   F1AE:4F                 MOV C, A        ; Start checksumming in C
+     1   F1AF:CD38F1             CALL GETHEX     ; Start address high byte
+     1   F1B2:67                 MOV H, A        ; Store in H
+     1   F1B3:81                 ADD C
+     1   F1B4:4F                 MOV C, A        ; Checksum
+     1   F1B5:CD38F1             CALL GETHEX     ; Start address low byte
+     1   F1B8:6F                 MOV L, A        ; Store in L
+     1   F1B9:81                 ADD C
+     1   F1BA:4F                 MOV C, A        ; Checksum
+     1   F1BB:CD38F1             CALL GETHEX     ; Get record type
+     1   F1BE:57                 MOV D, A        ; Store record type in D
+     1   F1BF:81                 ADD C
+     1   F1C0:4F                 MOV C, A        ; Checksum record type
+     1   F1C1:78                 MOV A, B        ; Check record length
+     1   F1C2:A7                 ANA A
+     1   F1C3:CAD1F1             JZ LOAD3        ; Length == 0, done getting data
+     1   F1C6:CD38F1     LOAD2:  CALL GETHEX
+     1   F1C9:77                 MOV M, A        ; Store char at HL
+     1   F1CA:81                 ADD C
+     1   F1CB:4F                 MOV C, A        ; Checksum
+     1   F1CC:23                 INX H           ; Move memory pointer up
+     1   F1CD:05                 DCR B
+     1   F1CE:C2C6F1             JNZ LOAD2       ; Not done with the line
+     1   F1D1:CD38F1     LOAD3:  CALL GETHEX     ; Get checksum byte
+     1   F1D4:81                 ADD C
+     1   F1D5:C2E5F1             JNZ CSUMER      ; Checksum bad, print error
+     1   F1D8:B2                 ORA D
+     1   F1D9:CA9CF1             JZ LOAD         ; Record Type 00, keep going
+     1   F1DC:CD5DF2     LOAD4:  CALL CINNE      ; Record Type 01, done
+     1   F1DF:FE0A               CPI 10          ; Check for LF
+     1   F1E1:C2DCF1             JNZ LOAD4
+     1   F1E4:C9                 RET             ; Got LF, return to command loop
+     1   F1E5:214EF2     CSUMER: LXI H, CSERR$
+     1   F1E8:CD8AF1             CALL ERROUT
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;Monitor Strings
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F1EB:0D0A0A4757 LOGMSG: db 13, 10, 10, 'GWMON-80 0.1.1 for 8080/8085/Z80 and Compatible', 13, 10
+     1   F21F:436F707972          db 'Copyright (c) 2018 The Glitch Works', 0
+     1   F243:0D0A0A3E00 PROMPT: db 13, 10, 10, '>', 0
+     1   F248:4552524F52 ERR:    db 'ERROR', 0
+     1   F24E:434845434B CSERR:  db 'CHECKSUM ERROR', 0
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;CINNE -- Get a char from the console, no echo
+     1                   ;
+     1                   ;pre: console device is initialized
+     1                   ;post: received char is in A register
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F25D:DB01       CINNE:  IN CTLPRT
+     1   F25F:E602               ANI 02H
+     1   F261:CA5DF2             JZ CINNE
+     1   F264:DB00               IN DATPRT
+     1   F266:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;CIN -- Get a char from the console and echo
+     1                   ;
+     1                   ;pre: console device is initialized
+     1                   ;post: received char is in A register
+     1                   ;post: received char is echoed
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F267:CD5DF2     CIN:    CALL CINNE
+     1   F26A:D300               OUT DATPRT
+     1   F26C:C9                 RET
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1                   ;COUT -- Output a character to the console
+     1                   ;
+     1                   ;pre: A register contains char to be printed
+     1                   ;post: character is printed to the console
+     1                   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     1   F26D:C5         COUT:   PUSH B
+     1   F26E:47                 MOV B, A
+     1   F26F:DB01       COUT1:  IN CTLPRT
+     1   F271:E601               ANI 01H
+     1   F273:CA6FF2             JZ COUT1
+     1   F276:78                 MOV A, B
+     1   F277:D300               OUT DATPRT
+     1   F279:C1                 POP B
+     1   F27A:C9                 RET
+     1                   ;Init string for the 8251, x16 clock, 8N1
+     1   F27B:000000404E INIUART:  db 00H, 00H, 00H, 40H, 4EH, 37H
+     1                   ;I/O Module description string
+     1   F281:0D0A52756E MSG:     db 13, 10, 'Running at 0xE000', 13, 10, 'Built with Intel 8251 I/O module', 0

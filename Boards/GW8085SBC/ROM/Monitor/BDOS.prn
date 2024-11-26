@@ -1,0 +1,3187 @@
+     1                   CCP             EQU     0E000H
+     1                   BDOS            EQU     0E800H
+     1                           ORG     BDOS
+     1                   ;**************************************************************
+     1                   ;*
+     1                   ;*             C P / M   version   2 . 2
+     1                   ;*
+     1                   ;*   Reconstructed from memory image on February 27, 1981
+     1                   ;*
+     1                   ;*                by Clark A. Calkins
+     1                   ;*
+     1                   ;**************************************************************
+     1                   ;
+     1                   ;   Set memory limit here. This is the amount of contigeous
+     1                   ; ram starting from 0000. CP/M will reside at the end of this space.
+     1                   ;
+     1                   MEM     EQU     64      ;for a 64k system
+     1                   ;
+     1                   ESCAPE  EQU 27
+     1                   IOBYTE  EQU     3       ;i/o definition byte.
+     1                   TDRIVE  EQU     4       ;current drive name and user number.
+     1                   ENTRY   EQU     5       ;entry point for the cp/m bdos.
+     1                   TFCB    EQU     5CH     ;default file control block.
+     1                   TBUFF   EQU     80H     ;i/o buffer and command line storage.
+     1                   TBASE   EQU     100H    ;transiant program storage area.
+     1                   ;
+     1                   ;   Set control character equates.
+     1                   ;
+     1                   CNTRLC  EQU     3       ;control-c
+     1                   CNTRLE  EQU     05H     ;control-e
+     1                   BS      EQU     08H     ;backspace
+     1                   TAB     EQU     09H     ;tab
+     1                   LF      EQU     0AH     ;line feed
+     1                   FF      EQU     0CH     ;form feed
+     1                   CR      EQU     0DH     ;carriage return
+     1                   CNTRLP  EQU     10H     ;control-p
+     1                   CNTRLR  EQU     12H     ;control-r
+     1                   CNTRLS  EQU     13H     ;control-s
+     1                   CNTRLU  EQU     15H     ;control-u
+     1                   CNTRLX  EQU     18H     ;control-x
+     1                   CNTRLZ  EQU     1AH     ;control-z (end-of-file mark)
+     1                   DEL     EQU     7FH     ;rubout
+     1                   ;**************************************************************
+     1                   ;*
+     1                   ;*                    B D O S   E N T R Y
+     1                   ;*
+     1                   ;**************************************************************
+     1                   ;
+     1                   FBASE:
+     1   E800:C30BE8             JMP     FBASE1
+     1                   ;
+     1                   ;   Bdos error table.
+     1                   ;
+     1   E803:93E8       BADSCTR:DW      ERROR1  ;bad sector on read or write.
+     1   E805:9FE8       BADSLCT:DW      ERROR2  ;bad disk select.
+     1   E807:A5E8       RODISK:         DW      ERROR3  ;disk is read only.
+     1   E809:ABE8       ROFILE:         DW      ERROR4  ;file is read only.
+     1                   ;
+     1                   ;   Entry into bdos. (DE) or (E) are the parameters passed. The
+     1                   ; function number desired is in register (C).
+     1                   ;
+     1                   FBASE1:
+     1   E80B:EB                 XCHG            ;save the (DE) parameters.
+     1   E80C:223DEB             SHLD    PARAMS
+     1   E80F:EB                 XCHG
+     1   E810:7B                 MOV     A,E     ;and save register (E) in particular.
+     1   E811:32D0F5             STA     EPARAM
+     1   E814:210000             LXI     H,0
+     1   E817:223FEB             SHLD    STATUS  ;clear return status.
+     1   E81A:39                 DAD     SP
+     1   E81B:2209EB             SHLD    USRSTACK;save users stack pointer.
+     1   E81E:313BEB             LXI     SP,STKAREA;and set our own.
+     1   E821:AF                 XRA     A       ;clear auto select storage space.
+     1   E822:32DAF5             STA     AUTOFLAG
+     1   E825:32D8F5             STA     AUTO
+     1   E828:216EF5             LXI     H,GOBACK;set return address.
+     1   E82B:E5                 PUSH    H
+     1   E82C:79                 MOV     A,C     ;get function number.
+     1   E82D:FE29               CPI     NFUNCTS ;valid function number?
+     1   E82F:D0                 RNC
+     1   E830:4B                 MOV     C,E     ;keep single register function here.
+     1   E831:2141E8             LXI     H,FUNCTNS;now look thru the function table.
+     1   E834:5F                 MOV     E,A
+     1   E835:1600               MVI     D,0     ;(DE)=function number.
+     1   E837:19                 DAD     D
+     1   E838:19                 DAD     D       ;(HL)=(start of table)+2*(function number).
+     1   E839:5E                 MOV     E,M
+     1   E83A:23                 INX     H
+     1   E83B:56                 MOV     D,M     ;now (DE)=address for this function.
+     1   E83C:2A3DEB             LHLD    PARAMS  ;retrieve parameters.
+     1   E83F:EB                 XCHG            ;now (DE) has the original parameters.
+     1   E840:E9                 PCHL            ;execute desired function.
+     1                   ;
+     1                   ;   BDOS function jump table.
+     1                   ;
+     1                   NFUNCTS EQU     41      ;number of functions in followin table.
+     1                   ;
+     1                   FUNCTNS:
+     1   E841:03F6C2EA8A         DW      WBOOT,GETCON,OUTCON,GETRDR,PUNCH,LIST,DIRCIO,GETIOB
+     1   E851:EDEAF2EADB         DW      SETIOB,PRTSTR,RDBUFF,GETCSTS,GETVER,RSTDSK,SETDSK,OPENFIL
+     1   E861:9FF4A5F4C2         DW      CLOSEFIL,GETFST,GETNXT,DELFILE,READSEQ,WRTSEQ,FCREATE
+     1   E86F:EFF4F8F4FE         DW      RENFILE,GETLOG,GETCRNT,PUTDMA,GETALOC,WRTPRTD,GETROV,SETATTR
+     1   E87F:20F527F53B         DW      GETPARM,GETUSER,RDRANDOM,WTRANDOM,FILESIZE,SETRAN,LOGOFF,RTN
+     1   E88F:FEEA95F5           DW      RTN,WTSPECL
+     1                   ;
+     1                   ;   Bdos error message section.
+     1                   ;
+     1                   ERROR1:
+     1   E893:21C4E8             LXI     H,BADSEC;bad sector message.
+     1   E896:CDDFE8             CALL    PRTERR  ;print it and get a 1 char responce.
+     1   E899:FE03               CPI     CNTRLC  ;re-boot request (control-c)?
+     1   E89B:CA0000             JZ      0       ;yes.
+     1   E89E:C9                 RET             ;no, return to retry i/o function.
+     1                   ;
+     1                   ERROR2:
+     1   E89F:21CFE8             LXI     H,BADSEL;bad drive selected.
+     1   E8A2:C3AEE8             JMP     ERROR5
+     1                   ;
+     1                   ERROR3:
+     1   E8A5:21DBE8             LXI     H,DISKRO;disk is read only.
+     1   E8A8:C3AEE8             JMP     ERROR5
+     1                   ;
+     1                   ERROR4:
+     1   E8AB:21D6E8             LXI     H,FILERO;file is read only.
+     1                   ;
+     1                   ERROR5:
+     1   E8AE:CDDFE8             CALL    PRTERR
+     1   E8B1:C30000             JMP     0       ;always reboot on these errors.
+     1                   ;
+     1   E8B4:42646F7320 BDOSERR:DB      'Bdos Err On '
+     1   E8C0:203A2024   BDOSDRV:DB      ' : $'
+     1   E8C4:4261642053 BADSEC:         DB      'Bad Sector$'
+     1   E8CF:53656C6563 BADSEL:         DB      'Select$'
+     1   E8D6:46696C6520 FILERO:         DB      'File '
+     1   E8DB:522F4F24   DISKRO:         DB      'R/O$'
+     1                   ;
+     1                   ;   Print bdos error message.
+     1                   ;
+     1                   PRTERR:
+     1   E8DF:E5                 PUSH    H       ;save second message pointer.
+     1   E8E0:CDC3E9             CALL    OUTCRLF ;send (cr)(lf).
+     1   E8E3:3A3CEB             LDA     ACTIVE  ;get active drive.
+     1   E8E6:C641               ADI     'A'     ;make ascii.
+     1   E8E8:32C0E8             STA     BDOSDRV ;and put in message.
+     1   E8EB:01B4E8             LXI     B,BDOSERR;and print it.
+     1   E8EE:CDCDE9             CALL    PRTMESG
+     1   E8F1:C1                 POP     B       ;print second message line now.
+     1   E8F2:CDCDE9             CALL    PRTMESG
+     1                   ;
+     1                   ;   Get an input character. We will check our 1 character
+     1                   ; buffer first. This may be set by the console status routine.
+     1                   ;
+     1                   GETCHAR:
+     1   E8F5:2108EB             LXI     H,CHARBUF;check character buffer.
+     1   E8F8:7E                 MOV     A,M     ;anything present already?
+     1   E8F9:3600               MVI     M,0     ;...either case clear it.
+     1   E8FB:B7                 ORA     A
+     1   E8FC:C0                 RNZ             ;yes, use it.
+     1   E8FD:C309F6             JMP     CONIN   ;nope, go get a character responce.
+     1                   ;
+     1                   ;   Input and echo a character.
+     1                   ;
+     1                   GETECHO:
+     1   E900:CDF5E8             CALL    GETCHAR ;input a character.
+     1   E903:CD0EE9             CALL    CHKCHAR ;carriage control?
+     1   E906:D8                 RC              ;no, a regular control char so don't echo.
+     1   E907:F5                 PUSH    PSW     ;ok, save character now.
+     1   E908:4F                 MOV     C,A
+     1   E909:CD8AE9             CALL    OUTCON  ;and echo it.
+     1   E90C:F1                 POP     PSW     ;get character and return.
+     1   E90D:C9                 RET
+     1                   ;
+     1                   ;   Check character in (A). Set the zero flag on a carriage
+     1                   ; control character and the carry flag on any other control
+     1                   ; character.
+     1                   ;
+     1                   CHKCHAR:
+     1   E90E:FE0D               CPI     CR      ;check for carriage return, line feed, backspace,
+     1   E910:C8                 RZ              ;or a tab.
+     1   E911:FE0A               CPI     LF
+     1   E913:C8                 RZ
+     1   E914:FE09               CPI     TAB
+     1   E916:C8                 RZ
+     1   E917:FE08               CPI     BS
+     1   E919:C8                 RZ
+     1   E91A:FE20               CPI     ' '     ;other control char? Set carry flag.
+     1   E91C:C9                 RET
+     1                   ;
+     1                   ;   Check the console during output. Halt on a control-s, then
+     1                   ; reboot on a control-c. If anything else is ready, clear the
+     1                   ; zero flag and return (the calling routine may want to do
+     1                   ; something).
+     1                   ;
+     1                   CKCONSOL:
+     1   E91D:3A08EB             LDA     CHARBUF ;check buffer.
+     1   E920:B7                 ORA     A       ;if anything, just return without checking.
+     1   E921:C23FE9             JNZ     CKCON2
+     1   E924:CD06F6             CALL    CONST   ;nothing in buffer. Check console.
+     1   E927:E601               ANI     01H     ;look at bit 0.
+     1   E929:C8                 RZ              ;return if nothing.
+     1   E92A:CD09F6             CALL    CONIN   ;ok, get it.
+     1   E92D:FE13               CPI     CNTRLS  ;if not control-s, return with zero cleared.
+     1   E92F:C23CE9             JNZ     CKCON1
+     1   E932:CD09F6             CALL    CONIN   ;halt processing until another char
+     1   E935:FE03               CPI     CNTRLC  ;is typed. Control-c?
+     1   E937:CA0000             JZ      0       ;yes, reboot now.
+     1   E93A:AF                 XRA     A       ;no, just pretend nothing was ever ready.
+     1   E93B:C9                 RET
+     1                   CKCON1:
+     1   E93C:3208EB             STA     CHARBUF ;save character in buffer for later processing.
+     1                   CKCON2:
+     1   E93F:3E01               MVI     A,1     ;set (A) to non zero to mean something is ready.
+     1   E941:C9                 RET
+     1                   ;
+     1                   ;   Output (C) to the screen. If the printer flip-flop flag
+     1                   ; is set, we will send character to printer also. The console
+     1                   ; will be checked in the process.
+     1                   ;
+     1                   OUTCHAR:
+     1   E942:3A04EB             LDA     OUTFLAG ;check output flag.
+     1   E945:B7                 ORA     A       ;anything and we won't generate output.
+     1   E946:C25CE9             JNZ     OUTCHR1
+     1   E949:C5                 PUSH    B
+     1   E94A:CD1DE9             CALL    CKCONSOL;check console (we don't care whats there).
+     1   E94D:C1                 POP     B
+     1   E94E:C5                 PUSH    B
+     1   E94F:CD0CF6             CALL    CONOUT  ;output (C) to the screen.
+     1   E952:C1                 POP     B
+     1   E953:C5                 PUSH    B
+     1   E954:3A07EB             LDA     PRTFLAG ;check printer flip-flop flag.
+     1   E957:B7                 ORA     A
+     1   E958:C40FF6             CNZ     LIST    ;print it also if non-zero.
+     1   E95B:C1                 POP     B
+     1                   OUTCHR1:
+     1   E95C:79                 MOV     A,C     ;update cursors position.
+     1   E95D:2106EB             LXI     H,CURPOS
+     1   E960:FE7F               CPI     DEL     ;rubouts don't do anything here.
+     1   E962:C8                 RZ
+     1   E963:34                 INR     M       ;bump line pointer.
+     1   E964:FE20               CPI     ' '     ;and return if a normal character.
+     1   E966:D0                 RNC
+     1   E967:35                 DCR     M       ;restore and check for the start of the line.
+     1   E968:7E                 MOV     A,M
+     1   E969:B7                 ORA     A
+     1   E96A:C8                 RZ              ;ingnore control characters at the start of the line.
+     1   E96B:79                 MOV     A,C
+     1   E96C:FE08               CPI     BS      ;is it a backspace?
+     1   E96E:C273E9             JNZ     OUTCHR2
+     1   E971:35                 DCR     M       ;yes, backup pointer.
+     1   E972:C9                 RET
+     1                   OUTCHR2:
+     1   E973:FE0A               CPI     LF      ;is it a line feed?
+     1   E975:C0                 RNZ             ;ignore anything else.
+     1   E976:3600               MVI     M,0     ;reset pointer to start of line.
+     1   E978:C9                 RET
+     1                   ;
+     1                   ;   Output (A) to the screen. If it is a control character
+     1                   ; (other than carriage control), use ^x format.
+     1                   ;
+     1                   SHOWIT:
+     1   E979:79                 MOV     A,C
+     1   E97A:CD0EE9             CALL    CHKCHAR ;check character.
+     1   E97D:D28AE9             JNC     OUTCON  ;not a control, use normal output.
+     1   E980:F5                 PUSH    PSW
+     1   E981:0E5E               MVI     C,'^'   ;for a control character, preceed it with '^'.
+     1   E983:CD42E9             CALL    OUTCHAR
+     1   E986:F1                 POP     PSW
+     1   E987:F640               ORI     '@'     ;and then use the letter equivelant.
+     1   E989:4F                 MOV     C,A
+     1                   ;
+     1                   ;   Function to output (C) to the console device and expand tabs
+     1                   ; if necessary.
+     1                   ;
+     1                   OUTCON:
+     1   E98A:79                 MOV     A,C
+     1   E98B:FE09               CPI     TAB     ;is it a tab?
+     1   E98D:C242E9             JNZ     OUTCHAR ;use regular output.
+     1                   OUTCON1:
+     1   E990:0E20               MVI     C,' '   ;yes it is, use spaces instead.
+     1   E992:CD42E9             CALL    OUTCHAR
+     1   E995:3A06EB             LDA     CURPOS  ;go until the cursor is at a multiple of 8
+     1   E998:E607               ANI     07H     ;position.
+     1   E99A:C290E9             JNZ     OUTCON1
+     1   E99D:C9                 RET
+     1                   ;
+     1                   ;   Echo a backspace character. Erase the prevoius character
+     1                   ; on the screen.
+     1                   ;
+     1                   BACKUP:
+     1   E99E:CDA6E9             CALL    BACKUP1 ;backup the screen 1 place.
+     1   E9A1:0E20               MVI     C,' '   ;then blank that character.
+     1   E9A3:CD0CF6             CALL    CONOUT
+     1                   BACKUP1:
+     1   E9A6:0E08               MVI     C,BS    ;then back space once more.
+     1   E9A8:C30CF6             JMP     CONOUT
+     1                   ;
+     1                   ;   Signal a deleted line. Print a '#' at the end and start
+     1                   ; over.
+     1                   ;
+     1                   NEWLINE:
+     1   E9AB:0E23               MVI     C,'#'
+     1   E9AD:CD42E9             CALL    OUTCHAR ;print this.
+     1   E9B0:CDC3E9             CALL    OUTCRLF ;start new line.
+     1                   NEWLN1:
+     1   E9B3:3A06EB             LDA     CURPOS  ;move the cursor to the starting position.
+     1   E9B6:2105EB             LXI     H,STARTING
+     1   E9B9:BE                 CMP     M
+     1   E9BA:D0                 RNC             ;there yet?
+     1   E9BB:0E20               MVI     C,' '
+     1   E9BD:CD42E9             CALL    OUTCHAR ;nope, keep going.
+     1   E9C0:C3B3E9             JMP     NEWLN1
+     1                   ;
+     1                   ;   Output a (cr) (lf) to the console device (screen).
+     1                   ;
+     1                   OUTCRLF:
+     1   E9C3:0E0D               MVI     C,CR
+     1   E9C5:CD42E9             CALL    OUTCHAR
+     1   E9C8:0E0A               MVI     C,LF
+     1   E9CA:C342E9             JMP     OUTCHAR
+     1                   ;
+     1                   ;   Print message pointed to by (BC). It will end with a '$'.
+     1                   ;
+     1                   PRTMESG:
+     1   E9CD:0A                 LDAX    B       ;check for terminating character.
+     1   E9CE:FE24               CPI     '$'
+     1   E9D0:C8                 RZ
+     1   E9D1:03                 INX     B
+     1   E9D2:C5                 PUSH    B       ;otherwise, bump pointer and print it.
+     1   E9D3:4F                 MOV     C,A
+     1   E9D4:CD8AE9             CALL    OUTCON
+     1   E9D7:C1                 POP     B
+     1   E9D8:C3CDE9             JMP     PRTMESG
+     1                   ;
+     1                   ;   Function to execute a buffered read.
+     1                   ;
+     1                   RDBUFF:
+     1   E9DB:3A06EB             LDA     CURPOS  ;use present location as starting one.
+     1   E9DE:3205EB             STA     STARTING
+     1   E9E1:2A3DEB             LHLD    PARAMS  ;get the maximum buffer space.
+     1   E9E4:4E                 MOV     C,M
+     1   E9E5:23                 INX     H       ;point to first available space.
+     1   E9E6:E5                 PUSH    H       ;and save.
+     1   E9E7:0600               MVI     B,0     ;keep a character count.
+     1                   RDBUF1:
+     1   E9E9:C5                 PUSH    B
+     1   E9EA:E5                 PUSH    H
+     1                   RDBUF2:
+     1   E9EB:CDF5E8             CALL    GETCHAR ;get the next input character.
+     1   E9EE:E67F               ANI     7FH     ;strip bit 7.
+     1   E9F0:E1                 POP     H       ;reset registers.
+     1   E9F1:C1                 POP     B
+     1   E9F2:FE0D               CPI     CR      ;en of the line?
+     1   E9F4:CABBEA             JZ      RDBUF17
+     1   E9F7:FE0A               CPI     LF
+     1   E9F9:CABBEA             JZ      RDBUF17
+     1   E9FC:FE08               CPI     BS      ;how about a backspace?
+     1   E9FE:C210EA             JNZ     RDBUF3
+     1   EA01:78                 MOV     A,B     ;yes, but ignore at the beginning of the line.
+     1   EA02:B7                 ORA     A
+     1   EA03:CAE9E9             JZ      RDBUF1
+     1   EA06:05                 DCR     B       ;ok, update counter.
+     1   EA07:3A06EB             LDA     CURPOS  ;if we backspace to the start of the line,
+     1   EA0A:3204EB             STA     OUTFLAG ;treat as a cancel (control-x).
+     1   EA0D:C36AEA             JMP     RDBUF10
+     1                   RDBUF3:
+     1   EA10:FE7F               CPI     DEL     ;user typed a rubout?
+     1   EA12:C220EA             JNZ     RDBUF4
+     1   EA15:78                 MOV     A,B     ;ignore at the start of the line.
+     1   EA16:B7                 ORA     A
+     1   EA17:CAE9E9             JZ      RDBUF1
+     1   EA1A:7E                 MOV     A,M     ;ok, echo the prevoius character.
+     1   EA1B:05                 DCR     B       ;and reset pointers (counters).
+     1   EA1C:2B                 DCX     H
+     1   EA1D:C3A3EA             JMP     RDBUF15
+     1                   RDBUF4:
+     1   EA20:FE05               CPI     CNTRLE  ;physical end of line?
+     1   EA22:C231EA             JNZ     RDBUF5
+     1   EA25:C5                 PUSH    B       ;yes, do it.
+     1   EA26:E5                 PUSH    H
+     1   EA27:CDC3E9             CALL    OUTCRLF
+     1   EA2A:AF                 XRA     A       ;and update starting position.
+     1   EA2B:3205EB             STA     STARTING
+     1   EA2E:C3EBE9             JMP     RDBUF2
+     1                   RDBUF5:
+     1   EA31:FE10               CPI     CNTRLP  ;control-p?
+     1   EA33:C242EA             JNZ     RDBUF6
+     1   EA36:E5                 PUSH    H       ;yes, flip the print flag filp-flop byte.
+     1   EA37:2107EB             LXI     H,PRTFLAG
+     1   EA3A:3E01               MVI     A,1     ;PRTFLAG=1-PRTFLAG
+     1   EA3C:96                 SUB     M
+     1   EA3D:77                 MOV     M,A
+     1   EA3E:E1                 POP     H
+     1   EA3F:C3E9E9             JMP     RDBUF1
+     1                   RDBUF6:
+     1   EA42:FE18               CPI     CNTRLX  ;control-x (cancel)?
+     1   EA44:C259EA             JNZ     RDBUF8
+     1   EA47:E1                 POP     H
+     1                   RDBUF7:
+     1   EA48:3A05EB             LDA     STARTING;yes, backup the cursor to here.
+     1   EA4B:2106EB             LXI     H,CURPOS
+     1   EA4E:BE                 CMP     M
+     1   EA4F:D2DBE9             JNC     RDBUFF  ;done yet?
+     1   EA52:35                 DCR     M       ;no, decrement pointer and output back up one space.
+     1   EA53:CD9EE9             CALL    BACKUP
+     1   EA56:C348EA             JMP     RDBUF7
+     1                   RDBUF8:
+     1   EA59:FE15               CPI     CNTRLU  ;cntrol-u (cancel line)?
+     1   EA5B:C265EA             JNZ     RDBUF9
+     1   EA5E:CDABE9             CALL    NEWLINE ;start a new line.
+     1   EA61:E1                 POP     H
+     1   EA62:C3DBE9             JMP     RDBUFF
+     1                   RDBUF9:
+     1   EA65:FE12               CPI     CNTRLR  ;control-r?
+     1   EA67:C2A0EA             JNZ     RDBUF14
+     1                   RDBUF10:
+     1   EA6A:C5                 PUSH    B       ;yes, start a new line and retype the old one.
+     1   EA6B:CDABE9             CALL    NEWLINE
+     1   EA6E:C1                 POP     B
+     1   EA6F:E1                 POP     H
+     1   EA70:E5                 PUSH    H
+     1   EA71:C5                 PUSH    B
+     1                   RDBUF11:
+     1   EA72:78                 MOV     A,B     ;done whole line yet?
+     1   EA73:B7                 ORA     A
+     1   EA74:CA84EA             JZ      RDBUF12
+     1   EA77:23                 INX     H       ;nope, get next character.
+     1   EA78:4E                 MOV     C,M
+     1   EA79:05                 DCR     B       ;count it.
+     1   EA7A:C5                 PUSH    B
+     1   EA7B:E5                 PUSH    H
+     1   EA7C:CD79E9             CALL    SHOWIT  ;and display it.
+     1   EA7F:E1                 POP     H
+     1   EA80:C1                 POP     B
+     1   EA81:C372EA             JMP     RDBUF11
+     1                   RDBUF12:
+     1   EA84:E5                 PUSH    H       ;done with line. If we were displaying
+     1   EA85:3A04EB             LDA     OUTFLAG ;then update cursor position.
+     1   EA88:B7                 ORA     A
+     1   EA89:CAEBE9             JZ      RDBUF2
+     1   EA8C:2106EB             LXI     H,CURPOS;because this line is shorter, we must
+     1   EA8F:96                 SUB     M       ;back up the cursor (not the screen however)
+     1   EA90:3204EB             STA     OUTFLAG ;some number of positions.
+     1                   RDBUF13:
+     1   EA93:CD9EE9             CALL    BACKUP  ;note that as long as (OUTFLAG) is non
+     1   EA96:2104EB             LXI     H,OUTFLAG;zero, the screen will not be changed.
+     1   EA99:35                 DCR     M
+     1   EA9A:C293EA             JNZ     RDBUF13
+     1   EA9D:C3EBE9             JMP     RDBUF2  ;now just get the next character.
+     1                   ;
+     1                   ;   Just a normal character, put this in our buffer and echo.
+     1                   ;
+     1                   RDBUF14:
+     1   EAA0:23                 INX     H
+     1   EAA1:77                 MOV     M,A     ;store character.
+     1   EAA2:04                 INR     B       ;and count it.
+     1                   RDBUF15:
+     1   EAA3:C5                 PUSH    B
+     1   EAA4:E5                 PUSH    H
+     1   EAA5:4F                 MOV     C,A     ;echo it now.
+     1   EAA6:CD79E9             CALL    SHOWIT
+     1   EAA9:E1                 POP     H
+     1   EAAA:C1                 POP     B
+     1   EAAB:7E                 MOV     A,M     ;was it an abort request?
+     1   EAAC:FE03               CPI     CNTRLC  ;control-c abort?
+     1   EAAE:78                 MOV     A,B
+     1   EAAF:C2B7EA             JNZ     RDBUF16
+     1   EAB2:FE01               CPI     1       ;only if at start of line.
+     1   EAB4:CA0000             JZ      0
+     1                   RDBUF16:
+     1   EAB7:B9                 CMP     C       ;nope, have we filled the buffer?
+     1   EAB8:DAE9E9             JC      RDBUF1
+     1                   RDBUF17:
+     1   EABB:E1                 POP     H       ;yes end the line and return.
+     1   EABC:70                 MOV     M,B
+     1   EABD:0E0D               MVI     C,CR
+     1   EABF:C342E9             JMP     OUTCHAR ;output (cr) and return.
+     1                   ;
+     1                   ;   Function to get a character from the console device.
+     1                   ;
+     1                   GETCON:
+     1   EAC2:CD00E9             CALL    GETECHO ;get and echo.
+     1   EAC5:C3FBEA             JMP     SETSTAT ;save status and return.
+     1                   ;
+     1                   ;   Function to get a character from the tape reader device.
+     1                   ;
+     1                   GETRDR:
+     1   EAC8:CD15F6             CALL    READER  ;get a character from reader, set status and return.
+     1   EACB:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   ;  Function to perform direct console i/o. If (C) contains (FF)
+     1                   ; then this is an input request. If (C) contains (FE) then
+     1                   ; this is a status request. Otherwise we are to output (C).
+     1                   ;
+     1                   DIRCIO:
+     1   EACE:79                 MOV     A,C     ;test for (FF).
+     1   EACF:3C                 INR     A
+     1   EAD0:CADAEA             JZ      DIRC1
+     1   EAD3:3C                 INR     A       ;test for (FE).
+     1   EAD4:CA06F6             JZ      CONST
+     1   EAD7:C30CF6             JMP     CONOUT  ;just output (C).
+     1                   DIRC1:
+     1   EADA:CD06F6             CALL    CONST   ;this is an input request.
+     1   EADD:B7                 ORA     A
+     1   EADE:CA8BF5             JZ      GOBACK1 ;not ready? Just return (directly).
+     1   EAE1:CD09F6             CALL    CONIN   ;yes, get character.
+     1   EAE4:C3FBEA             JMP     SETSTAT ;set status and return.
+     1                   ;
+     1                   ;   Function to return the i/o byte.
+     1                   ;
+     1                   GETIOB:
+     1   EAE7:3A0300             LDA     IOBYTE
+     1   EAEA:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   ;   Function to set the i/o byte.
+     1                   ;
+     1                   SETIOB:
+     1   EAED:210300             LXI     H,IOBYTE
+     1   EAF0:71                 MOV     M,C
+     1   EAF1:C9                 RET
+     1                   ;
+     1                   ;   Function to print the character string pointed to by (DE)
+     1                   ; on the console device. The string ends with a '$'.
+     1                   ;
+     1                   PRTSTR:
+     1   EAF2:EB                 XCHG
+     1   EAF3:4D                 MOV     C,L
+     1   EAF4:44                 MOV     B,H     ;now (BC) points to it.
+     1   EAF5:C3CDE9             JMP     PRTMESG
+     1                   ;
+     1                   ;   Function to interigate the console device.
+     1                   ;
+     1                   GETCSTS:
+     1   EAF8:CD1DE9             CALL    CKCONSOL
+     1                   ;
+     1                   ;   Get here to set the status and return to the cleanup
+     1                   ; section. Then back to the user.
+     1                   ;
+     1                   SETSTAT:
+     1   EAFB:323FEB             STA     STATUS
+     1                   RTN:
+     1   EAFE:C9                 RET
+     1                   ;
+     1                   ;   Set the status to 1 (read or write error code).
+     1                   ;
+     1                   IOERR1:
+     1   EAFF:3E01               MVI     A,1
+     1   EB01:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   OUTFLAG:
+     1   EB04:00                         DB      0       ;output flag (non zero means no output).
+     1                   STARTING:
+     1   EB05:02                         DB      2       ;starting position for cursor.
+     1   EB06:00         CURPOS:         DB      0       ;cursor position (0=start of line).
+     1   EB07:00         PRTFLAG:DB      0       ;printer flag (control-p toggle). List if non zero.
+     1   EB08:00         CHARBUF:DB      0       ;single input character buffer.
+     1                   ;
+     1                   ;   Stack area for BDOS calls.
+     1                   ;
+     1                   USRSTACK:
+     1   EB09:0000               DW      0       ;save users stack pointer here.
+     1                   ;
+     1   EB0B:0000000000         DB      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+     1   EB23:0000000000         DB      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+     1                   STKAREA EQU     $       ;end of stack area.
+     1                   ;
+     1                   USERNO:
+     1   EB3B:00                 DB      0       ;current user number.
+     1                   ACTIVE:
+     1   EB3C:00                 DB      0       ;currently active drive.
+     1                   PARAMS:
+     1   EB3D:0000               DW      0       ;save (DE) parameters here on entry.
+     1                   STATUS:
+     1   EB3F:0000               DW      0       ;status returned from bdos function.
+     1                   ;
+     1                   ;   Select error occured, jump to error routine.
+     1                   ;
+     1                   SLCTERR:
+     1   EB41:2105E8             LXI     H,BADSLCT
+     1                   ;
+     1                   ;   Jump to (HL) indirectly.
+     1                   ;
+     1                   JUMPHL:
+     1   EB44:5E                 MOV     E,M
+     1   EB45:23                 INX     H
+     1   EB46:56                 MOV     D,M     ;now (DE) contain the desired address.
+     1   EB47:EB                 XCHG
+     1   EB48:E9                 PCHL
+     1                   ;
+     1                   ;   Block move. (DE) to (HL), (C) bytes total.
+     1                   ;
+     1                   DE2HL:
+     1   EB49:0C                 INR     C       ;is count down to zero?
+     1                   DE2HL1:
+     1   EB4A:0D                 DCR     C
+     1   EB4B:C8                 RZ              ;yes, we are done.
+     1   EB4C:1A                 LDAX    D       ;no, move one more byte.
+     1   EB4D:77                 MOV     M,A
+     1   EB4E:13                 INX     D
+     1   EB4F:23                 INX     H
+     1   EB50:C34AEB             JMP     DE2HL1  ;and repeat.
+     1                   ;
+     1                   ;   Select the desired drive.
+     1                   ;
+     1                   SELECT:
+     1   EB53:3A3CEB             LDA     ACTIVE  ;get active disk.
+     1   EB56:4F                 MOV     C,A
+     1   EB57:CD1BF6             CALL    SELDSK  ;select it.
+     1   EB5A:7C                 MOV     A,H     ;valid drive?
+     1   EB5B:B5                 ORA     L       ;valid drive?
+     1   EB5C:C8                 RZ              ;return if not.
+     1                   ;
+     1                   ;   Here, the BIOS returned the address of the parameter block
+     1                   ; in (HL). We will extract the necessary pointers and save them.
+     1                   ;
+     1   EB5D:5E                 MOV     E,M     ;yes, get address of translation table into (DE).
+     1   EB5E:23                 INX     H
+     1   EB5F:56                 MOV     D,M
+     1   EB60:23                 INX     H
+     1   EB61:22ADF5             SHLD    SCRATCH1;save pointers to scratch areas.
+     1   EB64:23                 INX     H
+     1   EB65:23                 INX     H
+     1   EB66:22AFF5             SHLD    SCRATCH2;ditto.
+     1   EB69:23                 INX     H
+     1   EB6A:23                 INX     H
+     1   EB6B:22B1F5             SHLD    SCRATCH3;ditto.
+     1   EB6E:23                 INX     H
+     1   EB6F:23                 INX     H
+     1   EB70:EB                 XCHG            ;now save the translation table address.
+     1   EB71:22CAF5             SHLD    XLATE
+     1   EB74:21B3F5             LXI     H,DIRBUF;put the next 8 bytes here.
+     1   EB77:0E08               MVI     C,8     ;they consist of the directory buffer
+     1   EB79:CD49EB             CALL    DE2HL   ;pointer, parameter block pointer,
+     1   EB7C:2AB5F5             LHLD    DISKPB  ;check and allocation vectors.
+     1   EB7F:EB                 XCHG
+     1   EB80:21BBF5             LXI     H,SECTORS       ;move parameter block into our ram.
+     1   EB83:0E0F               MVI     C,15    ;it is 15 bytes long.
+     1   EB85:CD49EB             CALL    DE2HL
+     1   EB88:2AC0F5             LHLD    DSKSIZE ;check disk size.
+     1   EB8B:7C                 MOV     A,H     ;more than 256 blocks on this?
+     1   EB8C:21D7F5             LXI     H,BIGDISK
+     1   EB8F:36FF               MVI     M,0FFH  ;set to samll.
+     1   EB91:B7                 ORA     A
+     1   EB92:CA97EB             JZ      SELECT1
+     1   EB95:3600               MVI     M,0     ;wrong, set to large.
+     1                   SELECT1:
+     1   EB97:3EFF               MVI     A,0FFH  ;clear the zero flag.
+     1   EB99:B7                 ORA     A
+     1   EB9A:C9                 RET
+     1                   ;
+     1                   ;   Routine to home the disk track head and clear pointers.
+     1                   ;
+     1                   HOMEDRV:
+     1   EB9B:CD18F6             CALL    HOME    ;home the head.
+     1   EB9E:AF                 XRA     A
+     1   EB9F:2AAFF5             LHLD    SCRATCH2;set our track pointer also.
+     1   EBA2:77                 MOV     M,A
+     1   EBA3:23                 INX     H
+     1   EBA4:77                 MOV     M,A
+     1   EBA5:2AB1F5             LHLD    SCRATCH3;and our sector pointer.
+     1   EBA8:77                 MOV     M,A
+     1   EBA9:23                 INX     H
+     1   EBAA:77                 MOV     M,A
+     1   EBAB:C9                 RET
+     1                   ;
+     1                   ;   Do the actual disk read and check the error return status.
+     1                   ;
+     1                   DOREAD:
+     1   EBAC:CD27F6             CALL    READ
+     1   EBAF:C3B5EB             JMP     IORET
+     1                   ;
+     1                   ;   Do the actual disk write and handle any bios error.
+     1                   ;
+     1                   DOWRITE:
+     1   EBB2:CD2AF6             CALL    WRITE
+     1                   IORET:
+     1   EBB5:B7                 ORA     A
+     1   EBB6:C8                 RZ              ;return unless an error occured.
+     1   EBB7:2103E8             LXI     H,BADSCTR;bad read/write on this sector.
+     1   EBBA:C344EB             JMP     JUMPHL
+     1                   ;
+     1                   ;   Routine to select the track and sector that the desired
+     1                   ; block number falls in.
+     1                   ;
+     1                   TRKSEC:
+     1   EBBD:2AE4F5             LHLD    FILEPOS ;get position of last accessed file
+     1   EBC0:0E02               MVI     C,2     ;in directory and compute sector #.
+     1   EBC2:CDE4EC             CALL    SHIFTR  ;sector #=file-position/4.
+     1   EBC5:22DFF5             SHLD    BLKNMBR ;save this as the block number of interest.
+     1   EBC8:22E6F5             SHLD    CKSUMTBL;what's it doing here too?
+     1                   ;
+     1                   ;   if the sector number has already been set (BLKNMBR), enter
+     1                   ; at this point.
+     1                   ;
+     1                   TRKSEC1:
+     1   EBCB:21DFF5             LXI     H,BLKNMBR
+     1   EBCE:4E                 MOV     C,M     ;move sector number into (BC).
+     1   EBCF:23                 INX     H
+     1   EBD0:46                 MOV     B,M
+     1   EBD1:2AB1F5             LHLD    SCRATCH3;get current sector number and
+     1   EBD4:5E                 MOV     E,M     ;move this into (DE).
+     1   EBD5:23                 INX     H
+     1   EBD6:56                 MOV     D,M
+     1   EBD7:2AAFF5             LHLD    SCRATCH2;get current track number.
+     1   EBDA:7E                 MOV     A,M     ;and this into (HL).
+     1   EBDB:23                 INX     H
+     1   EBDC:66                 MOV     H,M
+     1   EBDD:6F                 MOV     L,A
+     1                   TRKSEC2:
+     1   EBDE:79                 MOV     A,C     ;is desired sector before current one?
+     1   EBDF:93                 SUB     E
+     1   EBE0:78                 MOV     A,B
+     1   EBE1:9A                 SBB     D
+     1   EBE2:D2F4EB             JNC     TRKSEC3
+     1   EBE5:E5                 PUSH    H       ;yes, decrement sectors by one track.
+     1   EBE6:2ABBF5             LHLD    SECTORS ;get sectors per track.
+     1   EBE9:7B                 MOV     A,E
+     1   EBEA:95                 SUB     L
+     1   EBEB:5F                 MOV     E,A
+     1   EBEC:7A                 MOV     A,D
+     1   EBED:9C                 SBB     H
+     1   EBEE:57                 MOV     D,A     ;now we have backed up one full track.
+     1   EBEF:E1                 POP     H
+     1   EBF0:2B                 DCX     H       ;adjust track counter.
+     1   EBF1:C3DEEB             JMP     TRKSEC2
+     1                   TRKSEC3:
+     1   EBF4:E5                 PUSH    H       ;desired sector is after current one.
+     1   EBF5:2ABBF5             LHLD    SECTORS ;get sectors per track.
+     1   EBF8:19                 DAD     D       ;bump sector pointer to next track.
+     1   EBF9:DA09EC             JC      TRKSEC4
+     1   EBFC:79                 MOV     A,C     ;is desired sector now before current one?
+     1   EBFD:95                 SUB     L
+     1   EBFE:78                 MOV     A,B
+     1   EBFF:9C                 SBB     H
+     1   EC00:DA09EC             JC      TRKSEC4
+     1   EC03:EB                 XCHG            ;not yes, increment track counter
+     1   EC04:E1                 POP     H       ;and continue until it is.
+     1   EC05:23                 INX     H
+     1   EC06:C3F4EB             JMP     TRKSEC3
+     1                   ;
+     1                   ;   here we have determined the track number that contains the
+     1                   ; desired sector.
+     1                   ;
+     1                   TRKSEC4:
+     1   EC09:E1                 POP     H       ;get track number (HL).
+     1   EC0A:C5                 PUSH    B
+     1   EC0B:D5                 PUSH    D
+     1   EC0C:E5                 PUSH    H
+     1   EC0D:EB                 XCHG
+     1   EC0E:2AC8F5             LHLD    OFFSET  ;adjust for first track offset.
+     1   EC11:19                 DAD     D
+     1   EC12:44                 MOV     B,H
+     1   EC13:4D                 MOV     C,L
+     1   EC14:CD1EF6             CALL    SETTRK  ;select this track.
+     1   EC17:D1                 POP     D       ;reset current track pointer.
+     1   EC18:2AAFF5             LHLD    SCRATCH2
+     1   EC1B:73                 MOV     M,E
+     1   EC1C:23                 INX     H
+     1   EC1D:72                 MOV     M,D
+     1   EC1E:D1                 POP     D
+     1   EC1F:2AB1F5             LHLD    SCRATCH3;reset the first sector on this track.
+     1   EC22:73                 MOV     M,E
+     1   EC23:23                 INX     H
+     1   EC24:72                 MOV     M,D
+     1   EC25:C1                 POP     B
+     1   EC26:79                 MOV     A,C     ;now subtract the desired one.
+     1   EC27:93                 SUB     E       ;to make it relative (1-# sectors/track).
+     1   EC28:4F                 MOV     C,A
+     1   EC29:78                 MOV     A,B
+     1   EC2A:9A                 SBB     D
+     1   EC2B:47                 MOV     B,A
+     1   EC2C:2ACAF5             LHLD    XLATE   ;translate this sector according to this table.
+     1   EC2F:EB                 XCHG
+     1   EC30:CD30F6             CALL    SECTRN  ;let the bios translate it.
+     1   EC33:4D                 MOV     C,L
+     1   EC34:44                 MOV     B,H
+     1   EC35:C321F6             JMP     SETSEC  ;and select it.
+     1                   ;
+     1                   ;   Compute block number from record number (SAVNREC) and
+     1                   ; extent number (SAVEXT).
+     1                   ;
+     1                   GETBLOCK:
+     1   EC38:21BDF5             LXI     H,BLKSHFT;get logical to physical conversion.
+     1   EC3B:4E                 MOV     C,M     ;note that this is base 2 log of ratio.
+     1   EC3C:3ADDF5             LDA     SAVNREC ;get record number.
+     1                   GETBLK1:
+     1   EC3F:B7                 ORA     A       ;compute (A)=(A)/2^BLKSHFT.
+     1   EC40:1F                 RAR
+     1   EC41:0D                 DCR     C
+     1   EC42:C23FEC             JNZ     GETBLK1
+     1   EC45:47                 MOV     B,A     ;save result in (B).
+     1   EC46:3E08               MVI     A,8
+     1   EC48:96                 SUB     M
+     1   EC49:4F                 MOV     C,A     ;compute (C)=8-BLKSHFT.
+     1   EC4A:3ADCF5             LDA     SAVEXT
+     1                   GETBLK2:
+     1   EC4D:0D                 DCR     C       ;compute (A)=SAVEXT*2^(8-BLKSHFT).
+     1   EC4E:CA56EC             JZ      GETBLK3
+     1   EC51:B7                 ORA     A
+     1   EC52:17                 RAL
+     1   EC53:C34DEC             JMP     GETBLK2
+     1                   GETBLK3:
+     1   EC56:80                 ADD     B
+     1   EC57:C9                 RET
+     1                   ;
+     1                   ;   Routine to extract the (BC) block byte from the fcb pointed
+     1                   ; to by (PARAMS). If this is a big-disk, then these are 16 bit
+     1                   ; block numbers, else they are 8 bit numbers.
+     1                   ; Number is returned in (HL).
+     1                   ;
+     1                   EXTBLK:
+     1   EC58:2A3DEB             LHLD    PARAMS  ;get fcb address.
+     1   EC5B:111000             LXI     D,16    ;block numbers start 16 bytes into fcb.
+     1   EC5E:19                 DAD     D
+     1   EC5F:09                 DAD     B
+     1   EC60:3AD7F5             LDA     BIGDISK ;are we using a big-disk?
+     1   EC63:B7                 ORA     A
+     1   EC64:CA6BEC             JZ      EXTBLK1
+     1   EC67:6E                 MOV     L,M     ;no, extract an 8 bit number from the fcb.
+     1   EC68:2600               MVI     H,0
+     1   EC6A:C9                 RET
+     1                   EXTBLK1:
+     1   EC6B:09                 DAD     B       ;yes, extract a 16 bit number.
+     1   EC6C:5E                 MOV     E,M
+     1   EC6D:23                 INX     H
+     1   EC6E:56                 MOV     D,M
+     1   EC6F:EB                 XCHG            ;return in (HL).
+     1   EC70:C9                 RET
+     1                   ;
+     1                   ;   Compute block number.
+     1                   ;
+     1                   COMBLK:
+     1   EC71:CD38EC             CALL    GETBLOCK
+     1   EC74:4F                 MOV     C,A
+     1   EC75:0600               MVI     B,0
+     1   EC77:CD58EC             CALL    EXTBLK
+     1   EC7A:22DFF5             SHLD    BLKNMBR
+     1   EC7D:C9                 RET
+     1                   ;
+     1                   ;   Check for a zero block number (unused).
+     1                   ;
+     1                   CHKBLK:
+     1   EC7E:2ADFF5             LHLD    BLKNMBR
+     1   EC81:7D                 MOV     A,L     ;is it zero?
+     1   EC82:B4                 ORA     H
+     1   EC83:C9                 RET
+     1                   ;
+     1                   ;   Adjust physical block (BLKNMBR) and convert to logical
+     1                   ; sector (LOGSECT). This is the starting sector of this block.
+     1                   ; The actual sector of interest is then added to this and the
+     1                   ; resulting sector number is stored back in (BLKNMBR). This
+     1                   ; will still have to be adjusted for the track number.
+     1                   ;
+     1                   LOGICAL:
+     1   EC84:3ABDF5             LDA     BLKSHFT ;get log2(physical/logical sectors).
+     1   EC87:2ADFF5             LHLD    BLKNMBR ;get physical sector desired.
+     1                   LOGICL1:
+     1   EC8A:29                 DAD     H       ;compute logical sector number.
+     1   EC8B:3D                 DCR     A       ;note logical sectors are 128 bytes long.
+     1   EC8C:C28AEC             JNZ     LOGICL1
+     1   EC8F:22E1F5             SHLD    LOGSECT ;save logical sector.
+     1   EC92:3ABEF5             LDA     BLKMASK ;get block mask.
+     1   EC95:4F                 MOV     C,A
+     1   EC96:3ADDF5             LDA     SAVNREC ;get next sector to access.
+     1   EC99:A1                 ANA     C       ;extract the relative position within physical block.
+     1   EC9A:B5                 ORA     L       ;and add it too logical sector.
+     1   EC9B:6F                 MOV     L,A
+     1   EC9C:22DFF5             SHLD    BLKNMBR ;and store.
+     1   EC9F:C9                 RET
+     1                   ;
+     1                   ;   Set (HL) to point to extent byte in fcb.
+     1                   ;
+     1                   SETEXT:
+     1   ECA0:2A3DEB             LHLD    PARAMS
+     1   ECA3:110C00             LXI     D,12    ;it is the twelth byte.
+     1   ECA6:19                 DAD     D
+     1   ECA7:C9                 RET
+     1                   ;
+     1                   ;   Set (HL) to point to record count byte in fcb and (DE) to
+     1                   ; next record number byte.
+     1                   ;
+     1                   SETHLDE:
+     1   ECA8:2A3DEB             LHLD    PARAMS
+     1   ECAB:110F00             LXI     D,15    ;record count byte (#15).
+     1   ECAE:19                 DAD     D
+     1   ECAF:EB                 XCHG
+     1   ECB0:211100             LXI     H,17    ;next record number (#32).
+     1   ECB3:19                 DAD     D
+     1   ECB4:C9                 RET
+     1                   ;
+     1                   ;   Save current file data from fcb.
+     1                   ;
+     1                   STRDATA:
+     1   ECB5:CDA8EC             CALL    SETHLDE
+     1   ECB8:7E                 MOV     A,M     ;get and store record count byte.
+     1   ECB9:32DDF5             STA     SAVNREC
+     1   ECBC:EB                 XCHG
+     1   ECBD:7E                 MOV     A,M     ;get and store next record number byte.
+     1   ECBE:32DBF5             STA     SAVNXT
+     1   ECC1:CDA0EC             CALL    SETEXT  ;point to extent byte.
+     1   ECC4:3ABFF5             LDA     EXTMASK ;get extent mask.
+     1   ECC7:A6                 ANA     M
+     1   ECC8:32DCF5             STA     SAVEXT  ;and save extent here.
+     1   ECCB:C9                 RET
+     1                   ;
+     1                   ;   Set the next record to access. If (MODE) is set to 2, then
+     1                   ; the last record byte (SAVNREC) has the correct number to access.
+     1                   ; For sequential access, (MODE) will be equal to 1.
+     1                   ;
+     1                   SETNREC:
+     1   ECCC:CDA8EC             CALL    SETHLDE
+     1   ECCF:3ACFF5             LDA     MODE    ;get sequential flag (=1).
+     1   ECD2:FE02               CPI     2       ;a 2 indicates that no adder is needed.
+     1   ECD4:C2D8EC             JNZ     STNREC1
+     1   ECD7:AF                 XRA     A       ;clear adder (random access?).
+     1                   STNREC1:
+     1   ECD8:4F                 MOV     C,A
+     1   ECD9:3ADDF5             LDA     SAVNREC ;get last record number.
+     1   ECDC:81                 ADD     C       ;increment record count.
+     1   ECDD:77                 MOV     M,A     ;and set fcb's next record byte.
+     1   ECDE:EB                 XCHG
+     1   ECDF:3ADBF5             LDA     SAVNXT  ;get next record byte from storage.
+     1   ECE2:77                 MOV     M,A     ;and put this into fcb as number of records used.
+     1   ECE3:C9                 RET
+     1                   ;
+     1                   ;   Shift (HL) right (C) bits.
+     1                   ;
+     1                   SHIFTR:
+     1   ECE4:0C                 INR     C
+     1                   SHIFTR1:
+     1   ECE5:0D                 DCR     C
+     1   ECE6:C8                 RZ
+     1   ECE7:7C                 MOV     A,H
+     1   ECE8:B7                 ORA     A
+     1   ECE9:1F                 RAR
+     1   ECEA:67                 MOV     H,A
+     1   ECEB:7D                 MOV     A,L
+     1   ECEC:1F                 RAR
+     1   ECED:6F                 MOV     L,A
+     1   ECEE:C3E5EC             JMP     SHIFTR1
+     1                   ;
+     1                   ;   Compute the check-sum for the directory buffer. Return
+     1                   ; integer sum in (A).
+     1                   ;
+     1                   CHECKSUM:
+     1   ECF1:0E80               MVI     C,128   ;length of buffer.
+     1   ECF3:2AB3F5             LHLD    DIRBUF  ;get its location.
+     1   ECF6:AF                 XRA     A       ;clear summation byte.
+     1                   CHKSUM1:
+     1   ECF7:86                 ADD     M       ;and compute sum ignoring carries.
+     1   ECF8:23                 INX     H
+     1   ECF9:0D                 DCR     C
+     1   ECFA:C2F7EC             JNZ     CHKSUM1
+     1   ECFD:C9                 RET
+     1                   ;
+     1                   ;   Shift (HL) left (C) bits.
+     1                   ;
+     1                   SHIFTL:
+     1   ECFE:0C                 INR     C
+     1                   SHIFTL1:
+     1   ECFF:0D                 DCR     C
+     1   ED00:C8                 RZ
+     1   ED01:29                 DAD     H       ;shift left 1 bit.
+     1   ED02:C3FFEC             JMP     SHIFTL1
+     1                   ;
+     1                   ;   Routine to set a bit in a 16 bit value contained in (BC).
+     1                   ; The bit set depends on the current drive selection.
+     1                   ;
+     1                   SETBIT:
+     1   ED05:C5                 PUSH    B       ;save 16 bit word.
+     1   ED06:3A3CEB             LDA     ACTIVE  ;get active drive.
+     1   ED09:4F                 MOV     C,A
+     1   ED0A:210100             LXI     H,1
+     1   ED0D:CDFEEC             CALL    SHIFTL  ;shift bit 0 into place.
+     1   ED10:C1                 POP     B       ;now 'or' this with the original word.
+     1   ED11:79                 MOV     A,C
+     1   ED12:B5                 ORA     L
+     1   ED13:6F                 MOV     L,A     ;low byte done, do high byte.
+     1   ED14:78                 MOV     A,B
+     1   ED15:B4                 ORA     H
+     1   ED16:67                 MOV     H,A
+     1   ED17:C9                 RET
+     1                   ;
+     1                   ;   Extract the write protect status bit for the current drive.
+     1                   ; The result is returned in (A), bit 0.
+     1                   ;
+     1                   GETWPRT:
+     1   ED18:2AA7F5             LHLD    WRTPRT  ;get status bytes.
+     1   ED1B:3A3CEB             LDA     ACTIVE  ;which drive is current?
+     1   ED1E:4F                 MOV     C,A
+     1   ED1F:CDE4EC             CALL    SHIFTR  ;shift status such that bit 0 is the
+     1   ED22:7D                 MOV     A,L     ;one of interest for this drive.
+     1   ED23:E601               ANI     01H     ;and isolate it.
+     1   ED25:C9                 RET
+     1                   ;
+     1                   ;   Function to write protect the current disk.
+     1                   ;
+     1                   WRTPRTD:
+     1   ED26:21A7F5             LXI     H,WRTPRT;point to status word.
+     1   ED29:4E                 MOV     C,M     ;set (BC) equal to the status.
+     1   ED2A:23                 INX     H
+     1   ED2B:46                 MOV     B,M
+     1   ED2C:CD05ED             CALL    SETBIT  ;and set this bit according to current drive.
+     1   ED2F:22A7F5             SHLD    WRTPRT  ;then save.
+     1   ED32:2AC2F5             LHLD    DIRSIZE ;now save directory size limit.
+     1   ED35:23                 INX     H       ;remember the last one.
+     1   ED36:EB                 XCHG
+     1   ED37:2AADF5             LHLD    SCRATCH1;and store it here.
+     1   ED3A:73                 MOV     M,E     ;put low byte.
+     1   ED3B:23                 INX     H
+     1   ED3C:72                 MOV     M,D     ;then high byte.
+     1   ED3D:C9                 RET
+     1                   ;
+     1                   ;   Check for a read only file.
+     1                   ;
+     1                   CHKROFL:
+     1   ED3E:CD58ED             CALL    FCB2HL  ;set (HL) to file entry in directory buffer.
+     1                   CKROF1:
+     1   ED41:110900             LXI     D,9     ;look at bit 7 of the ninth byte.
+     1   ED44:19                 DAD     D
+     1   ED45:7E                 MOV     A,M
+     1   ED46:17                 RAL
+     1   ED47:D0                 RNC             ;return if ok.
+     1   ED48:2109E8             LXI     H,ROFILE;else, print error message and terminate.
+     1   ED4B:C344EB             JMP     JUMPHL
+     1                   ;
+     1                   ;   Check the write protect status of the active disk.
+     1                   ;
+     1                   CHKWPRT:
+     1   ED4E:CD18ED             CALL    GETWPRT
+     1   ED51:C8                 RZ              ;return if ok.
+     1   ED52:2107E8             LXI     H,RODISK;else print message and terminate.
+     1   ED55:C344EB             JMP     JUMPHL
+     1                   ;
+     1                   ;   Routine to set (HL) pointing to the proper entry in the
+     1                   ; directory buffer.
+     1                   ;
+     1                   FCB2HL:
+     1   ED58:2AB3F5             LHLD    DIRBUF  ;get address of buffer.
+     1   ED5B:3AE3F5             LDA     FCBPOS  ;relative position of file.
+     1                   ;
+     1                   ;   Routine to add (A) to (HL).
+     1                   ;
+     1                   ADDA2HL:
+     1   ED5E:85                 ADD     L
+     1   ED5F:6F                 MOV     L,A
+     1   ED60:D0                 RNC
+     1   ED61:24                 INR     H       ;take care of any carry.
+     1   ED62:C9                 RET
+     1                   ;
+     1                   ;   Routine to get the 's2' byte from the fcb supplied in
+     1                   ; the initial parameter specification.
+     1                   ;
+     1                   GETS2:
+     1   ED63:2A3DEB             LHLD    PARAMS  ;get address of fcb.
+     1   ED66:110E00             LXI     D,14    ;relative position of 's2'.
+     1   ED69:19                 DAD     D
+     1   ED6A:7E                 MOV     A,M     ;extract this byte.
+     1   ED6B:C9                 RET
+     1                   ;
+     1                   ;   Clear the 's2' byte in the fcb.
+     1                   ;
+     1                   CLEARS2:
+     1   ED6C:CD63ED             CALL    GETS2   ;this sets (HL) pointing to it.
+     1   ED6F:3600               MVI     M,0     ;now clear it.
+     1   ED71:C9                 RET
+     1                   ;
+     1                   ;   Set bit 7 in the 's2' byte of the fcb.
+     1                   ;
+     1                   SETS2B7:
+     1   ED72:CD63ED             CALL    GETS2   ;get the byte.
+     1   ED75:F680               ORI     80H     ;and set bit 7.
+     1   ED77:77                 MOV     M,A     ;then store.
+     1   ED78:C9                 RET
+     1                   ;
+     1                   ;   Compare (FILEPOS) with (SCRATCH1) and set flags based on
+     1                   ; the difference. This checks to see if there are more file
+     1                   ; names in the directory. We are at (FILEPOS) and there are
+     1                   ; (SCRATCH1) of them to check.
+     1                   ;
+     1                   MOREFLS:
+     1   ED79:2AE4F5             LHLD    FILEPOS ;we are here.
+     1   ED7C:EB                 XCHG
+     1   ED7D:2AADF5             LHLD    SCRATCH1;and don't go past here.
+     1   ED80:7B                 MOV     A,E     ;compute difference but don't keep.
+     1   ED81:96                 SUB     M
+     1   ED82:23                 INX     H
+     1   ED83:7A                 MOV     A,D
+     1   ED84:9E                 SBB     M       ;set carry if no more names.
+     1   ED85:C9                 RET
+     1                   ;
+     1                   ;   Call this routine to prevent (SCRATCH1) from being greater
+     1                   ; than (FILEPOS).
+     1                   ;
+     1                   CHKNMBR:
+     1   ED86:CD79ED             CALL    MOREFLS ;SCRATCH1 too big?
+     1   ED89:D8                 RC
+     1   ED8A:13                 INX     D       ;yes, reset it to (FILEPOS).
+     1   ED8B:72                 MOV     M,D
+     1   ED8C:2B                 DCX     H
+     1   ED8D:73                 MOV     M,E
+     1   ED8E:C9                 RET
+     1                   ;
+     1                   ;   Compute (HL)=(DE)-(HL)
+     1                   ;
+     1                   SUBHL:
+     1   ED8F:7B                 MOV     A,E     ;compute difference.
+     1   ED90:95                 SUB     L
+     1   ED91:6F                 MOV     L,A     ;store low byte.
+     1   ED92:7A                 MOV     A,D
+     1   ED93:9C                 SBB     H
+     1   ED94:67                 MOV     H,A     ;and then high byte.
+     1   ED95:C9                 RET
+     1                   ;
+     1                   ;   Set the directory checksum byte.
+     1                   ;
+     1                   SETDIR:
+     1   ED96:0EFF               MVI     C,0FFH
+     1                   ;
+     1                   ;   Routine to set or compare the directory checksum byte. If
+     1                   ; (C)=0ffh, then this will set the checksum byte. Else the byte
+     1                   ; will be checked. If the check fails (the disk has been changed),
+     1                   ; then this disk will be write protected.
+     1                   ;
+     1                   CHECKDIR:
+     1   ED98:2AE6F5             LHLD    CKSUMTBL
+     1   ED9B:EB                 XCHG
+     1   ED9C:2AC6F5             LHLD    ALLOC1
+     1   ED9F:CD8FED             CALL    SUBHL
+     1   EDA2:D0                 RNC             ;ok if (CKSUMTBL) > (ALLOC1), so return.
+     1   EDA3:C5                 PUSH    B
+     1   EDA4:CDF1EC             CALL    CHECKSUM;else compute checksum.
+     1   EDA7:2AB7F5             LHLD    CHKVECT ;get address of checksum table.
+     1   EDAA:EB                 XCHG
+     1   EDAB:2AE6F5             LHLD    CKSUMTBL
+     1   EDAE:19                 DAD     D       ;set (HL) to point to byte for this drive.
+     1   EDAF:C1                 POP     B
+     1   EDB0:0C                 INR     C       ;set or check ?
+     1   EDB1:CABEED             JZ      CHKDIR1
+     1   EDB4:BE                 CMP     M       ;check them.
+     1   EDB5:C8                 RZ              ;return if they are the same.
+     1   EDB6:CD79ED             CALL    MOREFLS ;not the same, do we care?
+     1   EDB9:D0                 RNC
+     1   EDBA:CD26ED             CALL    WRTPRTD ;yes, mark this as write protected.
+     1   EDBD:C9                 RET
+     1                   CHKDIR1:
+     1   EDBE:77                 MOV     M,A     ;just set the byte.
+     1   EDBF:C9                 RET
+     1                   ;
+     1                   ;   Do a write to the directory of the current disk.
+     1                   ;
+     1                   DIRWRITE:
+     1   EDC0:CD96ED             CALL    SETDIR  ;set checksum byte.
+     1   EDC3:CDDAED             CALL    DIRDMA  ;set directory dma address.
+     1   EDC6:0E01               MVI     C,1     ;tell the bios to actually write.
+     1   EDC8:CDB2EB             CALL    DOWRITE ;then do the write.
+     1   EDCB:C3D4ED             JMP     DEFDMA
+     1                   ;
+     1                   ;   Read from the directory.
+     1                   ;
+     1                   DIRREAD:
+     1   EDCE:CDDAED             CALL    DIRDMA  ;set the directory dma address.
+     1   EDD1:CDACEB             CALL    DOREAD  ;and read it.
+     1                   ;
+     1                   ;   Routine to set the dma address to the users choice.
+     1                   ;
+     1                   DEFDMA:
+     1   EDD4:21ABF5             LXI     H,USERDMA;reset the default dma address and return.
+     1   EDD7:C3DDED             JMP     DIRDMA1
+     1                   ;
+     1                   ;   Routine to set the dma address for directory work.
+     1                   ;
+     1                   DIRDMA:
+     1   EDDA:21B3F5             LXI     H,DIRBUF
+     1                   ;
+     1                   ;   Set the dma address. On entry, (HL) points to
+     1                   ; word containing the desired dma address.
+     1                   ;
+     1                   DIRDMA1:
+     1   EDDD:4E                 MOV     C,M
+     1   EDDE:23                 INX     H
+     1   EDDF:46                 MOV     B,M     ;setup (BC) and go to the bios to set it.
+     1   EDE0:C324F6             JMP     SETDMA
+     1                   ;
+     1                   ;   Move the directory buffer into user's dma space.
+     1                   ;
+     1                   MOVEDIR:
+     1   EDE3:2AB3F5             LHLD    DIRBUF  ;buffer is located here, and
+     1   EDE6:EB                 XCHG
+     1   EDE7:2AABF5             LHLD    USERDMA; put it here.
+     1   EDEA:0E80               MVI     C,128   ;this is its length.
+     1   EDEC:C349EB             JMP     DE2HL   ;move it now and return.
+     1                   ;
+     1                   ;   Check (FILEPOS) and set the zero flag if it equals 0ffffh.
+     1                   ;
+     1                   CKFILPOS:
+     1   EDEF:21E4F5             LXI     H,FILEPOS
+     1   EDF2:7E                 MOV     A,M
+     1   EDF3:23                 INX     H
+     1   EDF4:BE                 CMP     M       ;are both bytes the same?
+     1   EDF5:C0                 RNZ
+     1   EDF6:3C                 INR     A       ;yes, but are they each 0ffh?
+     1   EDF7:C9                 RET
+     1                   ;
+     1                   ;   Set location (FILEPOS) to 0ffffh.
+     1                   ;
+     1                   STFILPOS:
+     1   EDF8:21FFFF             LXI     H,0FFFFH
+     1   EDFB:22E4F5             SHLD    FILEPOS
+     1   EDFE:C9                 RET
+     1                   ;
+     1                   ;   Move on to the next file position within the current
+     1                   ; directory buffer. If no more exist, set pointer to 0ffffh
+     1                   ; and the calling routine will check for this. Enter with (C)
+     1                   ; equal to 0ffh to cause the checksum byte to be set, else we
+     1                   ; will check this disk and set write protect if checksums are
+     1                   ; not the same (applies only if another directory sector must
+     1                   ; be read).
+     1                   ;
+     1                   NXENTRY:
+     1   EDFF:2AC2F5             LHLD    DIRSIZE ;get directory entry size limit.
+     1   EE02:EB                 XCHG
+     1   EE03:2AE4F5             LHLD    FILEPOS ;get current count.
+     1   EE06:23                 INX     H       ;go on to the next one.
+     1   EE07:22E4F5             SHLD    FILEPOS
+     1   EE0A:CD8FED             CALL    SUBHL   ;(HL)=(DIRSIZE)-(FILEPOS)
+     1   EE0D:D213EE             JNC     NXENT1  ;is there more room left?
+     1   EE10:C3F8ED             JMP     STFILPOS;no. Set this flag and return.
+     1                   NXENT1:
+     1   EE13:3AE4F5             LDA     FILEPOS ;get file position within directory.
+     1   EE16:E603               ANI     03H     ;only look within this sector (only 4 entries fit).
+     1   EE18:0605               MVI     B,5     ;convert to relative position (32 bytes each).
+     1                   NXENT2:
+     1   EE1A:87                 ADD     A       ;note that this is not efficient code.
+     1   EE1B:05                 DCR     B       ;5 'ADD A's would be better.
+     1   EE1C:C21AEE             JNZ     NXENT2
+     1   EE1F:32E3F5             STA     FCBPOS  ;save it as position of fcb.
+     1   EE22:B7                 ORA     A
+     1   EE23:C0                 RNZ             ;return if we are within buffer.
+     1   EE24:C5                 PUSH    B
+     1   EE25:CDBDEB             CALL    TRKSEC  ;we need the next directory sector.
+     1   EE28:CDCEED             CALL    DIRREAD
+     1   EE2B:C1                 POP     B
+     1   EE2C:C398ED             JMP     CHECKDIR
+     1                   ;
+     1                   ;   Routine to to get a bit from the disk space allocation
+     1                   ; map. It is returned in (A), bit position 0. On entry to here,
+     1                   ; set (BC) to the block number on the disk to check.
+     1                   ; On return, (D) will contain the original bit position for
+     1                   ; this block number and (HL) will point to the address for it.
+     1                   ;
+     1                   CKBITMAP:
+     1   EE2F:79                 MOV     A,C     ;determine bit number of interest.
+     1   EE30:E607               ANI     07H     ;compute (D)=(E)=(C and 7)+1.
+     1   EE32:3C                 INR     A
+     1   EE33:5F                 MOV     E,A     ;save particular bit number.
+     1   EE34:57                 MOV     D,A
+     1                   ;
+     1                   ;   compute (BC)=(BC)/8.
+     1                   ;
+     1   EE35:79                 MOV     A,C
+     1   EE36:0F                 RRC             ;now shift right 3 bits.
+     1   EE37:0F                 RRC
+     1   EE38:0F                 RRC
+     1   EE39:E61F               ANI     1FH     ;and clear bits 7,6,5.
+     1   EE3B:4F                 MOV     C,A
+     1   EE3C:78                 MOV     A,B
+     1   EE3D:87                 ADD     A       ;now shift (B) into bits 7,6,5.
+     1   EE3E:87                 ADD     A
+     1   EE3F:87                 ADD     A
+     1   EE40:87                 ADD     A
+     1   EE41:87                 ADD     A
+     1   EE42:B1                 ORA     C       ;and add in (C).
+     1   EE43:4F                 MOV     C,A     ;ok, (C) ha been completed.
+     1   EE44:78                 MOV     A,B     ;is there a better way of doing this?
+     1   EE45:0F                 RRC
+     1   EE46:0F                 RRC
+     1   EE47:0F                 RRC
+     1   EE48:E61F               ANI     1FH
+     1   EE4A:47                 MOV     B,A     ;and now (B) is completed.
+     1                   ;
+     1                   ;   use this as an offset into the disk space allocation
+     1                   ; table.
+     1                   ;
+     1   EE4B:2AB9F5             LHLD    ALOCVECT
+     1   EE4E:09                 DAD     B
+     1   EE4F:7E                 MOV     A,M     ;now get correct byte.
+     1                   CKBMAP1:
+     1   EE50:07                 RLC             ;get correct bit into position 0.
+     1   EE51:1D                 DCR     E
+     1   EE52:C250EE             JNZ     CKBMAP1
+     1   EE55:C9                 RET
+     1                   ;
+     1                   ;   Set or clear the bit map such that block number (BC) will be marked
+     1                   ; as used. On entry, if (E)=0 then this bit will be cleared, if it equals
+     1                   ; 1 then it will be set (don't use anyother values).
+     1                   ;
+     1                   STBITMAP:
+     1   EE56:D5                 PUSH    D
+     1   EE57:CD2FEE             CALL    CKBITMAP;get the byte of interest.
+     1   EE5A:E6FE               ANI     0FEH    ;clear the affected bit.
+     1   EE5C:C1                 POP     B
+     1   EE5D:B1                 ORA     C       ;and now set it acording to (C).
+     1                   ;
+     1                   ;  entry to restore the original bit position and then store
+     1                   ; in table. (A) contains the value, (D) contains the bit
+     1                   ; position (1-8), and (HL) points to the address within the
+     1                   ; space allocation table for this byte.
+     1                   ;
+     1                   STBMAP1:
+     1   EE5E:0F                 RRC             ;restore original bit position.
+     1   EE5F:15                 DCR     D
+     1   EE60:C25EEE             JNZ     STBMAP1
+     1   EE63:77                 MOV     M,A     ;and stor byte in table.
+     1   EE64:C9                 RET
+     1                   ;
+     1                   ;   Set/clear space used bits in allocation map for this file.
+     1                   ; On entry, (C)=1 to set the map and (C)=0 to clear it.
+     1                   ;
+     1                   SETFILE:
+     1   EE65:CD58ED             CALL    FCB2HL  ;get address of fcb
+     1   EE68:111000             LXI     D,16
+     1   EE6B:19                 DAD     D       ;get to block number bytes.
+     1   EE6C:C5                 PUSH    B
+     1   EE6D:0E11               MVI     C,17    ;check all 17 bytes (max) of table.
+     1                   SETFL1:
+     1   EE6F:D1                 POP     D
+     1   EE70:0D                 DCR     C       ;done all bytes yet?
+     1   EE71:C8                 RZ
+     1   EE72:D5                 PUSH    D
+     1   EE73:3AD7F5             LDA     BIGDISK ;check disk size for 16 bit block numbers.
+     1   EE76:B7                 ORA     A
+     1   EE77:CA82EE             JZ      SETFL2
+     1   EE7A:C5                 PUSH    B       ;only 8 bit numbers. set (BC) to this one.
+     1   EE7B:E5                 PUSH    H
+     1   EE7C:4E                 MOV     C,M     ;get low byte from table, always
+     1   EE7D:0600               MVI     B,0     ;set high byte to zero.
+     1   EE7F:C388EE             JMP     SETFL3
+     1                   SETFL2:
+     1   EE82:0D                 DCR     C       ;for 16 bit block numbers, adjust counter.
+     1   EE83:C5                 PUSH    B
+     1   EE84:4E                 MOV     C,M     ;now get both the low and high bytes.
+     1   EE85:23                 INX     H
+     1   EE86:46                 MOV     B,M
+     1   EE87:E5                 PUSH    H
+     1                   SETFL3:
+     1   EE88:79                 MOV     A,C     ;block used?
+     1   EE89:B0                 ORA     B
+     1   EE8A:CA97EE             JZ      SETFL4
+     1   EE8D:2AC0F5             LHLD    DSKSIZE ;is this block number within the
+     1   EE90:7D                 MOV     A,L     ;space on the disk?
+     1   EE91:91                 SUB     C
+     1   EE92:7C                 MOV     A,H
+     1   EE93:98                 SBB     B
+     1   EE94:D456EE             CNC     STBITMAP;yes, set the proper bit.
+     1                   SETFL4:
+     1   EE97:E1                 POP     H       ;point to next block number in fcb.
+     1   EE98:23                 INX     H
+     1   EE99:C1                 POP     B
+     1   EE9A:C36FEE             JMP     SETFL1
+     1                   ;
+     1                   ;   Construct the space used allocation bit map for the active
+     1                   ; drive. If a file name starts with '$' and it is under the
+     1                   ; current user number, then (STATUS) is set to minus 1. Otherwise
+     1                   ; it is not set at all.
+     1                   ;
+     1                   BITMAP:
+     1   EE9D:2AC0F5             LHLD    DSKSIZE ;compute size of allocation table.
+     1   EEA0:0E03               MVI     C,3
+     1   EEA2:CDE4EC             CALL    SHIFTR  ;(HL)=(HL)/8.
+     1   EEA5:23                 INX     H       ;at lease 1 byte.
+     1   EEA6:44                 MOV     B,H
+     1   EEA7:4D                 MOV     C,L     ;set (BC) to the allocation table length.
+     1                   ;
+     1                   ;   Initialize the bitmap for this drive. Right now, the first
+     1                   ; two bytes are specified by the disk parameter block. However
+     1                   ; a patch could be entered here if it were necessary to setup
+     1                   ; this table in a special mannor. For example, the bios could
+     1                   ; determine locations of 'bad blocks' and set them as already
+     1                   ; 'used' in the map.
+     1                   ;
+     1   EEA8:2AB9F5             LHLD    ALOCVECT;now zero out the table now.
+     1                   BITMAP1:
+     1   EEAB:3600               MVI     M,0
+     1   EEAD:23                 INX     H
+     1   EEAE:0B                 DCX     B
+     1   EEAF:78                 MOV     A,B
+     1   EEB0:B1                 ORA     C
+     1   EEB1:C2ABEE             JNZ     BITMAP1
+     1   EEB4:2AC4F5             LHLD    ALLOC0  ;get initial space used by directory.
+     1   EEB7:EB                 XCHG
+     1   EEB8:2AB9F5             LHLD    ALOCVECT;and put this into map.
+     1   EEBB:73                 MOV     M,E
+     1   EEBC:23                 INX     H
+     1   EEBD:72                 MOV     M,D
+     1                   ;
+     1                   ;   End of initialization portion.
+     1                   ;
+     1   EEBE:CD9BEB             CALL    HOMEDRV ;now home the drive.
+     1   EEC1:2AADF5             LHLD    SCRATCH1
+     1   EEC4:3603               MVI     M,3     ;force next directory request to read
+     1   EEC6:23                 INX     H       ;in a sector.
+     1   EEC7:3600               MVI     M,0
+     1   EEC9:CDF8ED             CALL    STFILPOS;clear initial file position also.
+     1                   BITMAP2:
+     1   EECC:0EFF               MVI     C,0FFH  ;read next file name in directory
+     1   EECE:CDFFED             CALL    NXENTRY ;and set checksum byte.
+     1   EED1:CDEFED             CALL    CKFILPOS;is there another file?
+     1   EED4:C8                 RZ
+     1   EED5:CD58ED             CALL    FCB2HL  ;yes, get its address.
+     1   EED8:3EE5               MVI     A,0E5H
+     1   EEDA:BE                 CMP     M       ;empty file entry?
+     1   EEDB:CACCEE             JZ      BITMAP2
+     1   EEDE:3A3BEB             LDA     USERNO  ;no, correct user number?
+     1   EEE1:BE                 CMP     M
+     1   EEE2:C2F0EE             JNZ     BITMAP3
+     1   EEE5:23                 INX     H
+     1   EEE6:7E                 MOV     A,M     ;yes, does name start with a '$'?
+     1   EEE7:D624               SUI     '$'
+     1   EEE9:C2F0EE             JNZ     BITMAP3
+     1   EEEC:3D                 DCR     A       ;yes, set atatus to minus one.
+     1   EEED:323FEB             STA     STATUS
+     1                   BITMAP3:
+     1   EEF0:0E01               MVI     C,1     ;now set this file's space as used in bit map.
+     1   EEF2:CD65EE             CALL    SETFILE
+     1   EEF5:CD86ED             CALL    CHKNMBR ;keep (SCRATCH1) in bounds.
+     1   EEF8:C3CCEE             JMP     BITMAP2
+     1                   ;
+     1                   ;   Set the status (STATUS) and return.
+     1                   ;
+     1                   STSTATUS:
+     1   EEFB:3ACEF5             LDA     FNDSTAT
+     1   EEFE:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   ;   Check extents in (A) and (C). Set the zero flag if they
+     1                   ; are the same. The number of 16k chunks of disk space that
+     1                   ; the directory extent covers is expressad is (EXTMASK+1).
+     1                   ; No registers are modified.
+     1                   ;
+     1                   SAMEXT:
+     1   EF01:C5                 PUSH    B
+     1   EF02:F5                 PUSH    PSW
+     1   EF03:3ABFF5             LDA     EXTMASK ;get extent mask and use it to
+     1   EF06:2F                 CMA             ;to compare both extent numbers.
+     1   EF07:47                 MOV     B,A     ;save resulting mask here.
+     1   EF08:79                 MOV     A,C     ;mask first extent and save in (C).
+     1   EF09:A0                 ANA     B
+     1   EF0A:4F                 MOV     C,A
+     1   EF0B:F1                 POP     PSW     ;now mask second extent and compare
+     1   EF0C:A0                 ANA     B       ;with the first one.
+     1   EF0D:91                 SUB     C
+     1   EF0E:E61F               ANI     1FH     ;(* only check buts 0-4 *)
+     1   EF10:C1                 POP     B       ;the zero flag is set if they are the same.
+     1   EF11:C9                 RET             ;restore (BC) and return.
+     1                   ;
+     1                   ;   Search for the first occurence of a file name. On entry,
+     1                   ; register (C) should contain the number of bytes of the fcb
+     1                   ; that must match.
+     1                   ;
+     1                   FINDFST:
+     1   EF12:3EFF               MVI     A,0FFH
+     1   EF14:32CEF5             STA     FNDSTAT
+     1   EF17:21D2F5             LXI     H,COUNTER;save character count.
+     1   EF1A:71                 MOV     M,C
+     1   EF1B:2A3DEB             LHLD    PARAMS  ;get filename to match.
+     1   EF1E:22D3F5             SHLD    SAVEFCB ;and save.
+     1   EF21:CDF8ED             CALL    STFILPOS;clear initial file position (set to 0ffffh).
+     1   EF24:CD9BEB             CALL    HOMEDRV ;home the drive.
+     1                   ;
+     1                   ;   Entry to locate the next occurence of a filename within the
+     1                   ; directory. The disk is not expected to have been changed. If
+     1                   ; it was, then it will be write protected.
+     1                   ;
+     1                   FINDNXT:
+     1   EF27:0E00               MVI     C,0     ;write protect the disk if changed.
+     1   EF29:CDFFED             CALL    NXENTRY ;get next filename entry in directory.
+     1   EF2C:CDEFED             CALL    CKFILPOS;is file position = 0ffffh?
+     1   EF2F:CA8EEF             JZ      FNDNXT6 ;yes, exit now then.
+     1   EF32:2AD3F5             LHLD    SAVEFCB ;set (DE) pointing to filename to match.
+     1   EF35:EB                 XCHG
+     1   EF36:1A                 LDAX    D
+     1   EF37:FEE5               CPI     0E5H    ;empty directory entry?
+     1   EF39:CA44EF             JZ      FNDNXT1 ;(* are we trying to reserect erased entries? *)
+     1   EF3C:D5                 PUSH    D
+     1   EF3D:CD79ED             CALL    MOREFLS ;more files in directory?
+     1   EF40:D1                 POP     D
+     1   EF41:D28EEF             JNC     FNDNXT6 ;no more. Exit now.
+     1                   FNDNXT1:
+     1   EF44:CD58ED             CALL    FCB2HL  ;get address of this fcb in directory.
+     1   EF47:3AD2F5             LDA     COUNTER ;get number of bytes (characters) to check.
+     1   EF4A:4F                 MOV     C,A
+     1   EF4B:0600               MVI     B,0     ;initialize byte position counter.
+     1                   FNDNXT2:
+     1   EF4D:79                 MOV     A,C     ;are we done with the compare?
+     1   EF4E:B7                 ORA     A
+     1   EF4F:CA7DEF             JZ      FNDNXT5
+     1   EF52:1A                 LDAX    D       ;no, check next byte.
+     1   EF53:FE3F               CPI     '?'     ;don't care about this character?
+     1   EF55:CA76EF             JZ      FNDNXT4
+     1   EF58:78                 MOV     A,B     ;get bytes position in fcb.
+     1   EF59:FE0D               CPI     13      ;don't care about the thirteenth byte either.
+     1   EF5B:CA76EF             JZ      FNDNXT4
+     1   EF5E:FE0C               CPI     12      ;extent byte?
+     1   EF60:1A                 LDAX    D
+     1   EF61:CA6DEF             JZ      FNDNXT3
+     1   EF64:96                 SUB     M       ;otherwise compare characters.
+     1   EF65:E67F               ANI     7FH
+     1   EF67:C227EF             JNZ     FINDNXT ;not the same, check next entry.
+     1   EF6A:C376EF             JMP     FNDNXT4 ;so far so good, keep checking.
+     1                   FNDNXT3:
+     1   EF6D:C5                 PUSH    B       ;check the extent byte here.
+     1   EF6E:4E                 MOV     C,M
+     1   EF6F:CD01EF             CALL    SAMEXT
+     1   EF72:C1                 POP     B
+     1   EF73:C227EF             JNZ     FINDNXT ;not the same, look some more.
+     1                   ;
+     1                   ;   So far the names compare. Bump pointers to the next byte
+     1                   ; and continue until all (C) characters have been checked.
+     1                   ;
+     1                   FNDNXT4:
+     1   EF76:13                 INX     D       ;bump pointers.
+     1   EF77:23                 INX     H
+     1   EF78:04                 INR     B
+     1   EF79:0D                 DCR     C       ;adjust character counter.
+     1   EF7A:C34DEF             JMP     FNDNXT2
+     1                   FNDNXT5:
+     1   EF7D:3AE4F5             LDA     FILEPOS ;return the position of this entry.
+     1   EF80:E603               ANI     03H
+     1   EF82:323FEB             STA     STATUS
+     1   EF85:21CEF5             LXI     H,FNDSTAT
+     1   EF88:7E                 MOV     A,M
+     1   EF89:17                 RAL
+     1   EF8A:D0                 RNC
+     1   EF8B:AF                 XRA     A
+     1   EF8C:77                 MOV     M,A
+     1   EF8D:C9                 RET
+     1                   ;
+     1                   ;   Filename was not found. Set appropriate status.
+     1                   ;
+     1                   FNDNXT6:
+     1   EF8E:CDF8ED             CALL    STFILPOS;set (FILEPOS) to 0ffffh.
+     1   EF91:3EFF               MVI     A,0FFH  ;say not located.
+     1   EF93:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   ;   Erase files from the directory. Only the first byte of the
+     1                   ; fcb will be affected. It is set to (E5).
+     1                   ;
+     1                   ERAFILE:
+     1   EF96:CD4EED             CALL    CHKWPRT ;is disk write protected?
+     1   EF99:0E0C               MVI     C,12    ;only compare file names.
+     1   EF9B:CD12EF             CALL    FINDFST ;get first file name.
+     1                   ERAFIL1:
+     1   EF9E:CDEFED             CALL    CKFILPOS;any found?
+     1   EFA1:C8                 RZ              ;nope, we must be done.
+     1   EFA2:CD3EED             CALL    CHKROFL ;is file read only?
+     1   EFA5:CD58ED             CALL    FCB2HL  ;nope, get address of fcb and
+     1   EFA8:36E5               MVI     M,0E5H  ;set first byte to 'empty'.
+     1   EFAA:0E00               MVI     C,0     ;clear the space from the bit map.
+     1   EFAC:CD65EE             CALL    SETFILE
+     1   EFAF:CDC0ED             CALL    DIRWRITE;now write the directory sector back out.
+     1   EFB2:CD27EF             CALL    FINDNXT ;find the next file name.
+     1   EFB5:C39EEF             JMP     ERAFIL1 ;and repeat process.
+     1                   ;
+     1                   ;   Look through the space allocation map (bit map) for the
+     1                   ; next available block. Start searching at block number (BC-1).
+     1                   ; The search procedure is to look for an empty block that is
+     1                   ; before the starting block. If not empty, look at a later
+     1                   ; block number. In this way, we return the closest empty block
+     1                   ; on either side of the 'target' block number. This will speed
+     1                   ; access on random devices. For serial devices, this should be
+     1                   ; changed to look in the forward direction first and then start
+     1                   ; at the front and search some more.
+     1                   ;
+     1                   ;   On return, (DE)= block number that is empty and (HL) =0
+     1                   ; if no empry block was found.
+     1                   ;
+     1   EFB8:50         FNDSPACE:MOV    D,B     ;set (DE) as the block that is checked.
+     1   EFB9:59                 MOV     E,C
+     1                   ;
+     1                   ;   Look before target block. Registers (BC) are used as the lower
+     1                   ; pointer and (DE) as the upper pointer.
+     1                   ;
+     1                   FNDSPA1:
+     1   EFBA:79                 MOV     A,C     ;is block 0 specified?
+     1   EFBB:B0                 ORA     B
+     1   EFBC:CACBEF             JZ      FNDSPA2
+     1   EFBF:0B                 DCX     B       ;nope, check previous block.
+     1   EFC0:D5                 PUSH    D
+     1   EFC1:C5                 PUSH    B
+     1   EFC2:CD2FEE             CALL    CKBITMAP
+     1   EFC5:1F                 RAR             ;is this block empty?
+     1   EFC6:D2E6EF             JNC     FNDSPA3 ;yes. use this.
+     1                   ;
+     1                   ;   Note that the above logic gets the first block that it finds
+     1                   ; that is empty. Thus a file could be written 'backward' making
+     1                   ; it very slow to access. This could be changed to look for the
+     1                   ; first empty block and then continue until the start of this
+     1                   ; empty space is located and then used that starting block.
+     1                   ; This should help speed up access to some files especially on
+     1                   ; a well used disk with lots of fairly small 'holes'.
+     1                   ;
+     1   EFC9:C1                 POP     B       ;nope, check some more.
+     1   EFCA:D1                 POP     D
+     1                   ;
+     1                   ;   Now look after target block.
+     1                   ;
+     1                   FNDSPA2:
+     1   EFCB:2AC0F5             LHLD    DSKSIZE ;is block (DE) within disk limits?
+     1   EFCE:7B                 MOV     A,E
+     1   EFCF:95                 SUB     L
+     1   EFD0:7A                 MOV     A,D
+     1   EFD1:9C                 SBB     H
+     1   EFD2:D2EEEF             JNC     FNDSPA4
+     1   EFD5:13                 INX     D       ;yes, move on to next one.
+     1   EFD6:C5                 PUSH    B
+     1   EFD7:D5                 PUSH    D
+     1   EFD8:42                 MOV     B,D
+     1   EFD9:4B                 MOV     C,E
+     1   EFDA:CD2FEE             CALL    CKBITMAP;check it.
+     1   EFDD:1F                 RAR             ;empty?
+     1   EFDE:D2E6EF             JNC     FNDSPA3
+     1   EFE1:D1                 POP     D       ;nope, continue searching.
+     1   EFE2:C1                 POP     B
+     1   EFE3:C3BAEF             JMP     FNDSPA1
+     1                   ;
+     1                   ;   Empty block found. Set it as used and return with (HL)
+     1                   ; pointing to it (true?).
+     1                   ;
+     1                   FNDSPA3:
+     1   EFE6:17                 RAL             ;reset byte.
+     1   EFE7:3C                 INR     A       ;and set bit 0.
+     1   EFE8:CD5EEE             CALL    STBMAP1 ;update bit map.
+     1   EFEB:E1                 POP     H       ;set return registers.
+     1   EFEC:D1                 POP     D
+     1   EFED:C9                 RET
+     1                   ;
+     1                   ;   Free block was not found. If (BC) is not zero, then we have
+     1                   ; not checked all of the disk space.
+     1                   ;
+     1                   FNDSPA4:
+     1   EFEE:79                 MOV     A,C
+     1   EFEF:B0                 ORA     B
+     1   EFF0:C2BAEF             JNZ     FNDSPA1
+     1   EFF3:210000             LXI     H,0     ;set 'not found' status.
+     1   EFF6:C9                 RET
+     1                   ;
+     1                   ;   Move a complete fcb entry into the directory and write it.
+     1                   ;
+     1                   FCBSET:
+     1   EFF7:0E00               MVI     C,0
+     1   EFF9:1E20               MVI     E,32    ;length of each entry.
+     1                   ;
+     1                   ;   Move (E) bytes from the fcb pointed to by (PARAMS) into
+     1                   ; fcb in directory starting at relative byte (C). This updated
+     1                   ; directory buffer is then written to the disk.
+     1                   ;
+     1                   UPDATE:
+     1   EFFB:D5                 PUSH    D
+     1   EFFC:0600               MVI     B,0     ;set (BC) to relative byte position.
+     1   EFFE:2A3DEB             LHLD    PARAMS  ;get address of fcb.
+     1   F001:09                 DAD     B       ;compute starting byte.
+     1   F002:EB                 XCHG
+     1   F003:CD58ED             CALL    FCB2HL  ;get address of fcb to update in directory.
+     1   F006:C1                 POP     B       ;set (C) to number of bytes to change.
+     1   F007:CD49EB             CALL    DE2HL
+     1                   UPDATE1:
+     1   F00A:CDBDEB             CALL    TRKSEC  ;determine the track and sector affected.
+     1   F00D:C3C0ED             JMP     DIRWRITE;then write this sector out.
+     1                   ;
+     1                   ;   Routine to change the name of all files on the disk with a
+     1                   ; specified name. The fcb contains the current name as the
+     1                   ; first 12 characters and the new name 16 bytes into the fcb.
+     1                   ;
+     1                   CHGNAMES:
+     1   F010:CD4EED             CALL    CHKWPRT ;check for a write protected disk.
+     1   F013:0E0C               MVI     C,12    ;match first 12 bytes of fcb only.
+     1   F015:CD12EF             CALL    FINDFST ;get first name.
+     1   F018:2A3DEB             LHLD    PARAMS  ;get address of fcb.
+     1   F01B:7E                 MOV     A,M     ;get user number.
+     1   F01C:111000             LXI     D,16    ;move over to desired name.
+     1   F01F:19                 DAD     D
+     1   F020:77                 MOV     M,A     ;keep same user number.
+     1                   CHGNAM1:
+     1   F021:CDEFED             CALL    CKFILPOS;any matching file found?
+     1   F024:C8                 RZ              ;no, we must be done.
+     1   F025:CD3EED             CALL    CHKROFL ;check for read only file.
+     1   F028:0E10               MVI     C,16    ;start 16 bytes into fcb.
+     1   F02A:1E0C               MVI     E,12    ;and update the first 12 bytes of directory.
+     1   F02C:CDFBEF             CALL    UPDATE
+     1   F02F:CD27EF             CALL    FINDNXT ;get te next file name.
+     1   F032:C321F0             JMP     CHGNAM1 ;and continue.
+     1                   ;
+     1                   ;   Update a files attributes. The procedure is to search for
+     1                   ; every file with the same name as shown in fcb (ignoring bit 7)
+     1                   ; and then to update it (which includes bit 7). No other changes
+     1                   ; are made.
+     1                   ;
+     1                   SAVEATTR:
+     1   F035:0E0C               MVI     C,12    ;match first 12 bytes.
+     1   F037:CD12EF             CALL    FINDFST ;look for first filename.
+     1                   SAVATR1:
+     1   F03A:CDEFED             CALL    CKFILPOS;was one found?
+     1   F03D:C8                 RZ              ;nope, we must be done.
+     1   F03E:0E00               MVI     C,0     ;yes, update the first 12 bytes now.
+     1   F040:1E0C               MVI     E,12
+     1   F042:CDFBEF             CALL    UPDATE  ;update filename and write directory.
+     1   F045:CD27EF             CALL    FINDNXT ;and get the next file.
+     1   F048:C33AF0             JMP     SAVATR1 ;then continue until done.
+     1                   ;
+     1                   ;  Open a file (name specified in fcb).
+     1                   ;
+     1                   OPENIT:
+     1   F04B:0E0F               MVI     C,15    ;compare the first 15 bytes.
+     1   F04D:CD12EF             CALL    FINDFST ;get the first one in directory.
+     1   F050:CDEFED             CALL    CKFILPOS;any at all?
+     1   F053:C8                 RZ
+     1                   OPENIT1:
+     1   F054:CDA0EC             CALL    SETEXT  ;point to extent byte within users fcb.
+     1   F057:7E                 MOV     A,M     ;and get it.
+     1   F058:F5                 PUSH    PSW     ;save it and address.
+     1   F059:E5                 PUSH    H
+     1   F05A:CD58ED             CALL    FCB2HL  ;point to fcb in directory.
+     1   F05D:EB                 XCHG
+     1   F05E:2A3DEB             LHLD    PARAMS  ;this is the users copy.
+     1   F061:0E20               MVI     C,32    ;move it into users space.
+     1   F063:D5                 PUSH    D
+     1   F064:CD49EB             CALL    DE2HL
+     1   F067:CD72ED             CALL    SETS2B7 ;set bit 7 in 's2' byte (unmodified).
+     1   F06A:D1                 POP     D       ;now get the extent byte from this fcb.
+     1   F06B:210C00             LXI     H,12
+     1   F06E:19                 DAD     D
+     1   F06F:4E                 MOV     C,M     ;into (C).
+     1   F070:210F00             LXI     H,15    ;now get the record count byte into (B).
+     1   F073:19                 DAD     D
+     1   F074:46                 MOV     B,M
+     1   F075:E1                 POP     H       ;keep the same extent as the user had originally.
+     1   F076:F1                 POP     PSW
+     1   F077:77                 MOV     M,A
+     1   F078:79                 MOV     A,C     ;is it the same as in the directory fcb?
+     1   F079:BE                 CMP     M
+     1   F07A:78                 MOV     A,B     ;if yes, then use the same record count.
+     1   F07B:CA85F0             JZ      OPENIT2
+     1   F07E:3E00               MVI     A,0     ;if the user specified an extent greater than
+     1   F080:DA85F0             JC      OPENIT2 ;the one in the directory, then set record count to 0.
+     1   F083:3E80               MVI     A,128   ;otherwise set to maximum.
+     1                   OPENIT2:
+     1   F085:2A3DEB             LHLD    PARAMS  ;set record count in users fcb to (A).
+     1   F088:110F00             LXI     D,15
+     1   F08B:19                 DAD     D       ;compute relative position.
+     1   F08C:77                 MOV     M,A     ;and set the record count.
+     1   F08D:C9                 RET
+     1                   ;
+     1                   ;   Move two bytes from (DE) to (HL) if (and only if) (HL)
+     1                   ; point to a zero value (16 bit).
+     1                   ;   Return with zero flag set it (DE) was moved. Registers (DE)
+     1                   ; and (HL) are not changed. However (A) is.
+     1                   ;
+     1                   MOVEWORD:
+     1   F08E:7E                 MOV     A,M     ;check for a zero word.
+     1   F08F:23                 INX     H
+     1   F090:B6                 ORA     M       ;both bytes zero?
+     1   F091:2B                 DCX     H
+     1   F092:C0                 RNZ             ;nope, just return.
+     1   F093:1A                 LDAX    D       ;yes, move two bytes from (DE) into
+     1   F094:77                 MOV     M,A     ;this zero space.
+     1   F095:13                 INX     D
+     1   F096:23                 INX     H
+     1   F097:1A                 LDAX    D
+     1   F098:77                 MOV     M,A
+     1   F099:1B                 DCX     D       ;don't disturb these registers.
+     1   F09A:2B                 DCX     H
+     1   F09B:C9                 RET
+     1                   ;
+     1                   ;   Get here to close a file specified by (fcb).
+     1                   ;
+     1                   CLOSEIT:
+     1   F09C:AF                 XRA     A       ;clear status and file position bytes.
+     1   F09D:323FEB             STA     STATUS
+     1   F0A0:32E4F5             STA     FILEPOS
+     1   F0A3:32E5F5             STA     FILEPOS+1
+     1   F0A6:CD18ED             CALL    GETWPRT ;get write protect bit for this drive.
+     1   F0A9:C0                 RNZ             ;just return if it is set.
+     1   F0AA:CD63ED             CALL    GETS2   ;else get the 's2' byte.
+     1   F0AD:E680               ANI     80H     ;and look at bit 7 (file unmodified?).
+     1   F0AF:C0                 RNZ             ;just return if set.
+     1   F0B0:0E0F               MVI     C,15    ;else look up this file in directory.
+     1   F0B2:CD12EF             CALL    FINDFST
+     1   F0B5:CDEFED             CALL    CKFILPOS;was it found?
+     1   F0B8:C8                 RZ              ;just return if not.
+     1   F0B9:011000             LXI     B,16    ;set (HL) pointing to records used section.
+     1   F0BC:CD58ED             CALL    FCB2HL
+     1   F0BF:09                 DAD     B
+     1   F0C0:EB                 XCHG
+     1   F0C1:2A3DEB             LHLD    PARAMS  ;do the same for users specified fcb.
+     1   F0C4:09                 DAD     B
+     1   F0C5:0E10               MVI     C,16    ;this many bytes are present in this extent.
+     1   F0C7:3AD7F5     CLOSEIT1:LDA    BIGDISK ;8 or 16 bit record numbers?
+     1   F0CA:B7                 ORA     A
+     1   F0CB:CAE2F0             JZ      CLOSEIT4
+     1   F0CE:7E                 MOV     A,M     ;just 8 bit. Get one from users fcb.
+     1   F0CF:B7                 ORA     A
+     1   F0D0:1A                 LDAX    D       ;now get one from directory fcb.
+     1   F0D1:C2D5F0             JNZ     CLOSEIT2
+     1   F0D4:77                 MOV     M,A     ;users byte was zero. Update from directory.
+     1   F0D5:B7         CLOSEIT2:ORA    A
+     1   F0D6:C2DBF0             JNZ     CLOSEIT3
+     1   F0D9:7E                 MOV     A,M     ;directories byte was zero, update from users fcb.
+     1   F0DA:12                 STAX    D
+     1   F0DB:BE         CLOSEIT3:CMP    M       ;if neither one of these bytes were zero,
+     1   F0DC:C219F1             JNZ     CLOSEIT7;then close error if they are not the same.
+     1   F0DF:C3F7F0             JMP     CLOSEIT5;ok so far, get to next byte in fcbs.
+     1   F0E2:CD8EF0     CLOSEIT4:CALL   MOVEWORD;update users fcb if it is zero.
+     1   F0E5:EB                 XCHG
+     1   F0E6:CD8EF0             CALL    MOVEWORD;update directories fcb if it is zero.
+     1   F0E9:EB                 XCHG
+     1   F0EA:1A                 LDAX    D       ;if these two values are no different,
+     1   F0EB:BE                 CMP     M       ;then a close error occured.
+     1   F0EC:C219F1             JNZ     CLOSEIT7
+     1   F0EF:13                 INX     D       ;check second byte.
+     1   F0F0:23                 INX     H
+     1   F0F1:1A                 LDAX    D
+     1   F0F2:BE                 CMP     M
+     1   F0F3:C219F1             JNZ     CLOSEIT7
+     1   F0F6:0D                 DCR     C       ;remember 16 bit values.
+     1                   CLOSEIT5:
+     1   F0F7:13                 INX     D       ;bump to next item in table.
+     1   F0F8:23                 INX     H
+     1   F0F9:0D                 DCR     C       ;there are 16 entries only.
+     1   F0FA:C2C7F0             JNZ     CLOSEIT1;continue if more to do.
+     1   F0FD:01ECFF             LXI     B,0FFECH;backup 20 places (extent byte).
+     1   F100:09                 DAD     B
+     1   F101:EB                 XCHG
+     1   F102:09                 DAD     B
+     1   F103:1A                 LDAX    D
+     1   F104:BE                 CMP     M       ;directory's extent already greater than the
+     1   F105:DA11F1             JC      CLOSEIT6;users extent?
+     1   F108:77                 MOV     M,A     ;no, update directory extent.
+     1   F109:010300             LXI     B,3     ;and update the record count byte in
+     1   F10C:09                 DAD     B       ;directories fcb.
+     1   F10D:EB                 XCHG
+     1   F10E:09                 DAD     B
+     1   F10F:7E                 MOV     A,M     ;get from user.
+     1   F110:12                 STAX    D       ;and put in directory.
+     1   F111:3EFF       CLOSEIT6:MVI    A,0FFH  ;set 'was open and is now closed' byte.
+     1   F113:32CCF5             STA     CLOSEFLG
+     1   F116:C30AF0             JMP     UPDATE1 ;update the directory now.
+     1                   CLOSEIT7:
+     1   F119:213FEB             LXI     H,STATUS;set return status and then return.
+     1   F11C:35                 DCR     M
+     1   F11D:C9                 RET
+     1                   ;
+     1                   ;   Routine to get the next empty space in the directory. It
+     1                   ; will then be cleared for use.
+     1                   ;
+     1                   GETEMPTY:
+     1   F11E:CD4EED             CALL    CHKWPRT ;make sure disk is not write protected.
+     1   F121:2A3DEB             LHLD    PARAMS  ;save current parameters (fcb).
+     1   F124:E5                 PUSH    H
+     1   F125:21A6F5             LXI     H,EMPTYFCB;use special one for empty space.
+     1   F128:223DEB             SHLD    PARAMS
+     1   F12B:0E01               MVI     C,1     ;search for first empty spot in directory.
+     1   F12D:CD12EF             CALL    FINDFST ;(* only check first byte *)
+     1   F130:CDEFED             CALL    CKFILPOS;none?
+     1   F133:E1                 POP     H
+     1   F134:223DEB             SHLD    PARAMS  ;restore original fcb address.
+     1   F137:C8                 RZ              ;return if no more space.
+     1   F138:EB                 XCHG
+     1   F139:210F00             LXI     H,15    ;point to number of records for this file.
+     1   F13C:19                 DAD     D
+     1   F13D:0E11               MVI     C,17    ;and clear all of this space.
+     1   F13F:AF                 XRA     A
+     1                   GETMT1:
+     1   F140:77                 MOV     M,A
+     1   F141:23                 INX     H
+     1   F142:0D                 DCR     C
+     1   F143:C240F1             JNZ     GETMT1
+     1   F146:210D00             LXI     H,13    ;clear the 's1' byte also.
+     1   F149:19                 DAD     D
+     1   F14A:77                 MOV     M,A
+     1   F14B:CD86ED             CALL    CHKNMBR ;keep (SCRATCH1) within bounds.
+     1   F14E:CDF7EF             CALL    FCBSET  ;write out this fcb entry to directory.
+     1   F151:C372ED             JMP     SETS2B7 ;set 's2' byte bit 7 (unmodified at present).
+     1                   ;
+     1                   ;   Routine to close the current extent and open the next one
+     1                   ; for reading.
+     1                   ;
+     1                   GETNEXT:
+     1   F154:AF                 XRA     A
+     1   F155:32CCF5             STA     CLOSEFLG;clear close flag.
+     1   F158:CD9CF0             CALL    CLOSEIT ;close this extent.
+     1   F15B:CDEFED             CALL    CKFILPOS
+     1   F15E:C8                 RZ              ;not there???
+     1   F15F:2A3DEB             LHLD    PARAMS  ;get extent byte.
+     1   F162:010C00             LXI     B,12
+     1   F165:09                 DAD     B
+     1   F166:7E                 MOV     A,M     ;and increment it.
+     1   F167:3C                 INR     A
+     1   F168:E61F               ANI     1FH     ;keep within range 0-31.
+     1   F16A:77                 MOV     M,A
+     1   F16B:CA7DF1             JZ      GTNEXT1 ;overflow?
+     1   F16E:47                 MOV     B,A     ;mask extent byte.
+     1   F16F:3ABFF5             LDA     EXTMASK
+     1   F172:A0                 ANA     B
+     1   F173:21CCF5             LXI     H,CLOSEFLG;check close flag (0ffh is ok).
+     1   F176:A6                 ANA     M
+     1   F177:CA88F1             JZ      GTNEXT2 ;if zero, we must read in next extent.
+     1   F17A:C3A6F1             JMP     GTNEXT3 ;else, it is already in memory.
+     1                   GTNEXT1:
+     1   F17D:010200             LXI     B,2     ;Point to the 's2' byte.
+     1   F180:09                 DAD     B
+     1   F181:34                 INR     M       ;and bump it.
+     1   F182:7E                 MOV     A,M     ;too many extents?
+     1   F183:E60F               ANI     0FH
+     1   F185:CAB0F1             JZ      GTNEXT5 ;yes, set error code.
+     1                   ;
+     1                   ;   Get here to open the next extent.
+     1                   ;
+     1                   GTNEXT2:
+     1   F188:0E0F               MVI     C,15    ;set to check first 15 bytes of fcb.
+     1   F18A:CD12EF             CALL    FINDFST ;find the first one.
+     1   F18D:CDEFED             CALL    CKFILPOS;none available?
+     1   F190:C2A6F1             JNZ     GTNEXT3
+     1   F193:3ACDF5             LDA     RDWRTFLG;no extent present. Can we open an empty one?
+     1   F196:3C                 INR     A       ;0ffh means reading (so not possible).
+     1   F197:CAB0F1             JZ      GTNEXT5 ;or an error.
+     1   F19A:CD1EF1             CALL    GETEMPTY;we are writing, get an empty entry.
+     1   F19D:CDEFED             CALL    CKFILPOS;none?
+     1   F1A0:CAB0F1             JZ      GTNEXT5 ;error if true.
+     1   F1A3:C3A9F1             JMP     GTNEXT4 ;else we are almost done.
+     1                   GTNEXT3:
+     1   F1A6:CD54F0             CALL    OPENIT1 ;open this extent.
+     1                   GTNEXT4:
+     1   F1A9:CDB5EC             CALL    STRDATA ;move in updated data (rec #, extent #, etc.)
+     1   F1AC:AF                 XRA     A       ;clear status and return.
+     1   F1AD:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   ;   Error in extending the file. Too many extents were needed
+     1                   ; or not enough space on the disk.
+     1                   ;
+     1                   GTNEXT5:
+     1   F1B0:CDFFEA             CALL    IOERR1  ;set error code, clear bit 7 of 's2'
+     1   F1B3:C372ED             JMP     SETS2B7 ;so this is not written on a close.
+     1                   ;
+     1                   ;   Read a sequential file.
+     1                   ;
+     1                   RDSEQ:
+     1   F1B6:3E01               MVI     A,1     ;set sequential access mode.
+     1   F1B8:32CFF5             STA     MODE
+     1                   RDSEQ1:
+     1   F1BB:3EFF               MVI     A,0FFH  ;don't allow reading unwritten space.
+     1   F1BD:32CDF5             STA     RDWRTFLG
+     1   F1C0:CDB5EC             CALL    STRDATA ;put rec# and ext# into fcb.
+     1   F1C3:3ADDF5             LDA     SAVNREC ;get next record to read.
+     1   F1C6:21DBF5             LXI     H,SAVNXT;get number of records in extent.
+     1   F1C9:BE                 CMP     M       ;within this extent?
+     1   F1CA:DAE0F1             JC      RDSEQ2
+     1   F1CD:FE80               CPI     128     ;no. Is this extent fully used?
+     1   F1CF:C2F5F1             JNZ     RDSEQ3  ;no. End-of-file.
+     1   F1D2:CD54F1             CALL    GETNEXT ;yes, open the next one.
+     1   F1D5:AF                 XRA     A       ;reset next record to read.
+     1   F1D6:32DDF5             STA     SAVNREC
+     1   F1D9:3A3FEB             LDA     STATUS  ;check on open, successful?
+     1   F1DC:B7                 ORA     A
+     1   F1DD:C2F5F1             JNZ     RDSEQ3  ;no, error.
+     1                   RDSEQ2:
+     1   F1E0:CD71EC             CALL    COMBLK  ;ok. compute block number to read.
+     1   F1E3:CD7EEC             CALL    CHKBLK  ;check it. Within bounds?
+     1   F1E6:CAF5F1             JZ      RDSEQ3  ;no, error.
+     1   F1E9:CD84EC             CALL    LOGICAL ;convert (BLKNMBR) to logical sector (128 byte).
+     1   F1EC:CDCBEB             CALL    TRKSEC1 ;set the track and sector for this block #.
+     1   F1EF:CDACEB             CALL    DOREAD  ;and read it.
+     1   F1F2:C3CCEC             JMP     SETNREC ;and set the next record to be accessed.
+     1                   ;
+     1                   ;   Read error occured. Set status and return.
+     1                   ;
+     1                   RDSEQ3:
+     1   F1F5:C3FFEA             JMP     IOERR1
+     1                   ;
+     1                   ;   Write the next sequential record.
+     1                   ;
+     1                   WTSEQ:
+     1   F1F8:3E01               MVI     A,1     ;set sequential access mode.
+     1   F1FA:32CFF5             STA     MODE
+     1                   WTSEQ1:
+     1   F1FD:3E00               MVI     A,0     ;allow an addition empty extent to be opened.
+     1   F1FF:32CDF5             STA     RDWRTFLG
+     1   F202:CD4EED             CALL    CHKWPRT ;check write protect status.
+     1   F205:2A3DEB             LHLD    PARAMS
+     1   F208:CD41ED             CALL    CKROF1  ;check for read only file, (HL) already set to fcb.
+     1   F20B:CDB5EC             CALL    STRDATA ;put updated data into fcb.
+     1   F20E:3ADDF5             LDA     SAVNREC ;get record number to write.
+     1   F211:FE80               CPI     128     ;within range?
+     1   F213:D2FFEA             JNC     IOERR1  ;no, error(?).
+     1   F216:CD71EC             CALL    COMBLK  ;compute block number.
+     1   F219:CD7EEC             CALL    CHKBLK  ;check number.
+     1   F21C:0E00               MVI     C,0     ;is there one to write to?
+     1   F21E:C268F2             JNZ     WTSEQ6  ;yes, go do it.
+     1   F221:CD38EC             CALL    GETBLOCK;get next block number within fcb to use.
+     1   F224:32D1F5             STA     RELBLOCK;and save.
+     1   F227:010000             LXI     B,0     ;start looking for space from the start
+     1   F22A:B7                 ORA     A       ;if none allocated as yet.
+     1   F22B:CA35F2             JZ      WTSEQ2
+     1   F22E:4F                 MOV     C,A     ;extract previous block number from fcb
+     1   F22F:0B                 DCX     B       ;so we can be closest to it.
+     1   F230:CD58EC             CALL    EXTBLK
+     1   F233:44                 MOV     B,H
+     1   F234:4D                 MOV     C,L
+     1                   WTSEQ2:
+     1   F235:CDB8EF             CALL    FNDSPACE;find the next empty block nearest number (BC).
+     1   F238:7D                 MOV     A,L     ;check for a zero number.
+     1   F239:B4                 ORA     H
+     1   F23A:C242F2             JNZ     WTSEQ3
+     1   F23D:3E02               MVI     A,2     ;no more space?
+     1   F23F:C3FBEA             JMP     SETSTAT
+     1                   WTSEQ3:
+     1   F242:22DFF5             SHLD    BLKNMBR ;save block number to access.
+     1   F245:EB                 XCHG            ;put block number into (DE).
+     1   F246:2A3DEB             LHLD    PARAMS  ;now we must update the fcb for this
+     1   F249:011000             LXI     B,16    ;newly allocated block.
+     1   F24C:09                 DAD     B
+     1   F24D:3AD7F5             LDA     BIGDISK ;8 or 16 bit block numbers?
+     1   F250:B7                 ORA     A
+     1   F251:3AD1F5             LDA     RELBLOCK;(* update this entry *)
+     1   F254:CA5EF2             JZ      WTSEQ4  ;zero means 16 bit ones.
+     1   F257:CD5EED             CALL    ADDA2HL ;(HL)=(HL)+(A)
+     1   F25A:73                 MOV     M,E     ;store new block number.
+     1   F25B:C366F2             JMP     WTSEQ5
+     1                   WTSEQ4:
+     1   F25E:4F                 MOV     C,A     ;compute spot in this 16 bit table.
+     1   F25F:0600               MVI     B,0
+     1   F261:09                 DAD     B
+     1   F262:09                 DAD     B
+     1   F263:73                 MOV     M,E     ;stuff block number (DE) there.
+     1   F264:23                 INX     H
+     1   F265:72                 MOV     M,D
+     1                   WTSEQ5:
+     1   F266:0E02               MVI     C,2     ;set (C) to indicate writing to un-used disk space.
+     1                   WTSEQ6:
+     1   F268:3A3FEB             LDA     STATUS  ;are we ok so far?
+     1   F26B:B7                 ORA     A
+     1   F26C:C0                 RNZ
+     1   F26D:C5                 PUSH    B       ;yes, save write flag for bios (register C).
+     1   F26E:CD84EC             CALL    LOGICAL ;convert (BLKNMBR) over to loical sectors.
+     1   F271:3ACFF5             LDA     MODE    ;get access mode flag (1=sequential,
+     1   F274:3D                 DCR     A       ;0=random, 2=special?).
+     1   F275:3D                 DCR     A
+     1   F276:C2B5F2             JNZ     WTSEQ9
+     1                   ;
+     1                   ;   Special random i/o from function #40. Maybe for M/PM, but the
+     1                   ; current block, if it has not been written to, will be zeroed
+     1                   ; out and then written (reason?).
+     1                   ;
+     1   F279:C1                 POP     B
+     1   F27A:C5                 PUSH    B
+     1   F27B:79                 MOV     A,C     ;get write status flag (2=writing unused space).
+     1   F27C:3D                 DCR     A
+     1   F27D:3D                 DCR     A
+     1   F27E:C2B5F2             JNZ     WTSEQ9
+     1   F281:E5                 PUSH    H
+     1   F282:2AB3F5             LHLD    DIRBUF  ;zero out the directory buffer.
+     1   F285:57                 MOV     D,A     ;note that (A) is zero here.
+     1                   WTSEQ7:
+     1   F286:77                 MOV     M,A
+     1   F287:23                 INX     H
+     1   F288:14                 INR     D       ;do 128 bytes.
+     1   F289:F286F2             JP      WTSEQ7
+     1   F28C:CDDAED             CALL    DIRDMA  ;tell the bios the dma address for directory access.
+     1   F28F:2AE1F5             LHLD    LOGSECT ;get sector that starts current block.
+     1   F292:0E02               MVI     C,2     ;set 'writing to unused space' flag.
+     1                   WTSEQ8:
+     1   F294:22DFF5             SHLD    BLKNMBR ;save sector to write.
+     1   F297:C5                 PUSH    B
+     1   F298:CDCBEB             CALL    TRKSEC1 ;determine its track and sector numbers.
+     1   F29B:C1                 POP     B
+     1   F29C:CDB2EB             CALL    DOWRITE ;now write out 128 bytes of zeros.
+     1   F29F:2ADFF5             LHLD    BLKNMBR ;get sector number.
+     1   F2A2:0E00               MVI     C,0     ;set normal write flag.
+     1   F2A4:3ABEF5             LDA     BLKMASK ;determine if we have written the entire
+     1   F2A7:47                 MOV     B,A     ;physical block.
+     1   F2A8:A5                 ANA     L
+     1   F2A9:B8                 CMP     B
+     1   F2AA:23                 INX     H       ;prepare for the next one.
+     1   F2AB:C294F2             JNZ     WTSEQ8  ;continue until (BLKMASK+1) sectors written.
+     1   F2AE:E1                 POP     H       ;reset next sector number.
+     1   F2AF:22DFF5             SHLD    BLKNMBR
+     1   F2B2:CDD4ED             CALL    DEFDMA  ;and reset dma address.
+     1                   ;
+     1                   ;   Normal disk write. Set the desired track and sector then
+     1                   ; do the actual write.
+     1                   ;
+     1                   WTSEQ9:
+     1   F2B5:CDCBEB             CALL    TRKSEC1 ;determine track and sector for this write.
+     1   F2B8:C1                 POP     B       ;get write status flag.
+     1   F2B9:C5                 PUSH    B
+     1   F2BA:CDB2EB             CALL    DOWRITE ;and write this out.
+     1   F2BD:C1                 POP     B
+     1   F2BE:3ADDF5             LDA     SAVNREC ;get number of records in file.
+     1   F2C1:21DBF5             LXI     H,SAVNXT;get last record written.
+     1   F2C4:BE                 CMP     M
+     1   F2C5:DACCF2             JC      WTSEQ10
+     1   F2C8:77                 MOV     M,A     ;we have to update record count.
+     1   F2C9:34                 INR     M
+     1   F2CA:0E02               MVI     C,2
+     1                   ;
+     1                   ;*   This area has been patched to correct disk update problem
+     1                   ;* when using blocking and de-blocking in the BIOS.
+     1                   ;
+     1                   WTSEQ10:
+     1   F2CC:00                 NOP             ;was 'dcr c'
+     1   F2CD:00                 NOP             ;was 'dcr c'
+     1   F2CE:210000             LXI     H,0     ;was 'jnz wtseq99'
+     1                   ;
+     1                   ; *   End of patch.
+     1                   ;
+     1   F2D1:F5                 PUSH    PSW
+     1   F2D2:CD63ED             CALL    GETS2   ;set 'extent written to' flag.
+     1   F2D5:E67F               ANI     7FH     ;(* clear bit 7 *)
+     1   F2D7:77                 MOV     M,A
+     1   F2D8:F1                 POP     PSW     ;get record count for this extent.
+     1                   WTSEQ99:
+     1   F2D9:FE7F               CPI     127     ;is it full?
+     1   F2DB:C2FAF2             JNZ     WTSEQ12
+     1   F2DE:3ACFF5             LDA     MODE    ;yes, are we in sequential mode?
+     1   F2E1:FE01               CPI     1
+     1   F2E3:C2FAF2             JNZ     WTSEQ12
+     1   F2E6:CDCCEC             CALL    SETNREC ;yes, set next record number.
+     1   F2E9:CD54F1             CALL    GETNEXT ;and get next empty space in directory.
+     1   F2EC:213FEB             LXI     H,STATUS;ok?
+     1   F2EF:7E                 MOV     A,M
+     1   F2F0:B7                 ORA     A
+     1   F2F1:C2F8F2             JNZ     WTSEQ11
+     1   F2F4:3D                 DCR     A       ;yes, set record count to -1.
+     1   F2F5:32DDF5             STA     SAVNREC
+     1                   WTSEQ11:
+     1   F2F8:3600               MVI     M,0     ;clear status.
+     1                   WTSEQ12:
+     1   F2FA:C3CCEC             JMP     SETNREC ;set next record to access.
+     1                   ;
+     1                   ;   For random i/o, set the fcb for the desired record number
+     1                   ; based on the 'r0,r1,r2' bytes. These bytes in the fcb are
+     1                   ; used as follows:
+     1                   ;
+     1                   ;       fcb+35            fcb+34            fcb+33
+     1                   ;  |     'r-2'      |      'r-1'      |      'r-0'     |
+     1                   ;  |7             0 | 7             0 | 7             0|
+     1                   ;  |0 0 0 0 0 0 0 0 | 0 0 0 0 0 0 0 0 | 0 0 0 0 0 0 0 0|
+     1                   ;  |    overflow   | | extra |  extent   |   record #  |
+     1                   ;  | ______________| |_extent|__number___|_____________|
+     1                   ;                     also 's2'
+     1                   ;
+     1                   ;   On entry, register (C) contains 0ffh if this is a read
+     1                   ; and thus we can not access unwritten disk space. Otherwise,
+     1                   ; another extent will be opened (for writing) if required.
+     1                   ;
+     1                   POSITION:
+     1   F2FD:AF                 XRA     A       ;set random i/o flag.
+     1   F2FE:32CFF5             STA     MODE
+     1                   ;
+     1                   ;   Special entry (function #40). M/PM ?
+     1                   ;
+     1                   POSITN1:
+     1   F301:C5                 PUSH    B       ;save read/write flag.
+     1   F302:2A3DEB             LHLD    PARAMS  ;get address of fcb.
+     1   F305:EB                 XCHG
+     1   F306:212100             LXI     H,33    ;now get byte 'r0'.
+     1   F309:19                 DAD     D
+     1   F30A:7E                 MOV     A,M
+     1   F30B:E67F               ANI     7FH     ;keep bits 0-6 for the record number to access.
+     1   F30D:F5                 PUSH    PSW
+     1   F30E:7E                 MOV     A,M     ;now get bit 7 of 'r0' and bits 0-3 of 'r1'.
+     1   F30F:17                 RAL
+     1   F310:23                 INX     H
+     1   F311:7E                 MOV     A,M
+     1   F312:17                 RAL
+     1   F313:E61F               ANI     1FH     ;and save this in bits 0-4 of (C).
+     1   F315:4F                 MOV     C,A     ;this is the extent byte.
+     1   F316:7E                 MOV     A,M     ;now get the extra extent byte.
+     1   F317:1F                 RAR
+     1   F318:1F                 RAR
+     1   F319:1F                 RAR
+     1   F31A:1F                 RAR
+     1   F31B:E60F               ANI     0FH
+     1   F31D:47                 MOV     B,A     ;and save it in (B).
+     1   F31E:F1                 POP     PSW     ;get record number back to (A).
+     1   F31F:23                 INX     H       ;check overflow byte 'r2'.
+     1   F320:6E                 MOV     L,M
+     1   F321:2C                 INR     L
+     1   F322:2D                 DCR     L
+     1   F323:2E06               MVI     L,6     ;prepare for error.
+     1   F325:C285F3             JNZ     POSITN5 ;out of disk space error.
+     1   F328:212000             LXI     H,32    ;store record number into fcb.
+     1   F32B:19                 DAD     D
+     1   F32C:77                 MOV     M,A
+     1   F32D:210C00             LXI     H,12    ;and now check the extent byte.
+     1   F330:19                 DAD     D
+     1   F331:79                 MOV     A,C
+     1   F332:96                 SUB     M       ;same extent as before?
+     1   F333:C241F3             JNZ     POSITN2
+     1   F336:210E00             LXI     H,14    ;yes, check extra extent byte 's2' also.
+     1   F339:19                 DAD     D
+     1   F33A:78                 MOV     A,B
+     1   F33B:96                 SUB     M
+     1   F33C:E67F               ANI     7FH
+     1   F33E:CA79F3             JZ      POSITN3;same, we are almost done then.
+     1                   ;
+     1                   ;  Get here when another extent is required.
+     1                   ;
+     1                   POSITN2:
+     1   F341:C5                 PUSH    B
+     1   F342:D5                 PUSH    D
+     1   F343:CD9CF0             CALL    CLOSEIT ;close current extent.
+     1   F346:D1                 POP     D
+     1   F347:C1                 POP     B
+     1   F348:2E03               MVI     L,3     ;prepare for error.
+     1   F34A:3A3FEB             LDA     STATUS
+     1   F34D:3C                 INR     A
+     1   F34E:CA7EF3             JZ      POSITN4 ;close error.
+     1   F351:210C00             LXI     H,12    ;put desired extent into fcb now.
+     1   F354:19                 DAD     D
+     1   F355:71                 MOV     M,C
+     1   F356:210E00             LXI     H,14    ;and store extra extent byte 's2'.
+     1   F359:19                 DAD     D
+     1   F35A:70                 MOV     M,B
+     1   F35B:CD4BF0             CALL    OPENIT  ;try and get this extent.
+     1   F35E:3A3FEB             LDA     STATUS  ;was it there?
+     1   F361:3C                 INR     A
+     1   F362:C279F3             JNZ     POSITN3
+     1   F365:C1                 POP     B       ;no. can we create a new one (writing?).
+     1   F366:C5                 PUSH    B
+     1   F367:2E04               MVI     L,4     ;prepare for error.
+     1   F369:0C                 INR     C
+     1   F36A:CA7EF3             JZ      POSITN4 ;nope, reading unwritten space error.
+     1   F36D:CD1EF1             CALL    GETEMPTY;yes we can, try to find space.
+     1   F370:2E05               MVI     L,5     ;prepare for error.
+     1   F372:3A3FEB             LDA     STATUS
+     1   F375:3C                 INR     A
+     1   F376:CA7EF3             JZ      POSITN4 ;out of space?
+     1                   ;
+     1                   ;   Normal return location. Clear error code and return.
+     1                   ;
+     1                   POSITN3:
+     1   F379:C1                 POP     B       ;restore stack.
+     1   F37A:AF                 XRA     A       ;and clear error code byte.
+     1   F37B:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   ;   Error. Set the 's2' byte to indicate this (why?).
+     1                   ;
+     1                   POSITN4:
+     1   F37E:E5                 PUSH    H
+     1   F37F:CD63ED             CALL    GETS2
+     1   F382:36C0               MVI     M,0C0H
+     1   F384:E1                 POP     H
+     1                   ;
+     1                   ;   Return with error code (presently in L).
+     1                   ;
+     1                   POSITN5:
+     1   F385:C1                 POP     B
+     1   F386:7D                 MOV     A,L     ;get error code.
+     1   F387:323FEB             STA     STATUS
+     1   F38A:C372ED             JMP     SETS2B7
+     1                   ;
+     1                   ;   Read a random record.
+     1                   ;
+     1                   READRAN:
+     1   F38D:0EFF               MVI     C,0FFH  ;set 'read' status.
+     1   F38F:CDFDF2             CALL    POSITION;position the file to proper record.
+     1   F392:CCBBF1             CZ      RDSEQ1  ;and read it as usual (if no errors).
+     1   F395:C9                 RET
+     1                   ;
+     1                   ;   Write to a random record.
+     1                   ;
+     1                   WRITERAN:
+     1   F396:0E00               MVI     C,0     ;set 'writing' flag.
+     1   F398:CDFDF2             CALL    POSITION;position the file to proper record.
+     1   F39B:CCFDF1             CZ      WTSEQ1  ;and write as usual (if no errors).
+     1   F39E:C9                 RET
+     1                   ;
+     1                   ;   Compute the random record number. Enter with (HL) pointing
+     1                   ; to a fcb an (DE) contains a relative location of a record
+     1                   ; number. On exit, (C) contains the 'r0' byte, (B) the 'r1'
+     1                   ; byte, and (A) the 'r2' byte.
+     1                   ;
+     1                   ;   On return, the zero flag is set if the record is within
+     1                   ; bounds. Otherwise, an overflow occured.
+     1                   ;
+     1                   COMPRAND:
+     1   F39F:EB                 XCHG            ;save fcb pointer in (DE).
+     1   F3A0:19                 DAD     D       ;compute relative position of record #.
+     1   F3A1:4E                 MOV     C,M     ;get record number into (BC).
+     1   F3A2:0600               MVI     B,0
+     1   F3A4:210C00             LXI     H,12    ;now get extent.
+     1   F3A7:19                 DAD     D
+     1   F3A8:7E                 MOV     A,M     ;compute (BC)=(record #)+(extent)*128.
+     1   F3A9:0F                 RRC             ;move lower bit into bit 7.
+     1   F3AA:E680               ANI     80H     ;and ignore all other bits.
+     1   F3AC:81                 ADD     C       ;add to our record number.
+     1   F3AD:4F                 MOV     C,A
+     1   F3AE:3E00               MVI     A,0     ;take care of any carry.
+     1   F3B0:88                 ADC     B
+     1   F3B1:47                 MOV     B,A
+     1   F3B2:7E                 MOV     A,M     ;now get the upper bits of extent into
+     1   F3B3:0F                 RRC             ;bit positions 0-3.
+     1   F3B4:E60F               ANI     0FH     ;and ignore all others.
+     1   F3B6:80                 ADD     B       ;add this in to 'r1' byte.
+     1   F3B7:47                 MOV     B,A
+     1   F3B8:210E00             LXI     H,14    ;get the 's2' byte (extra extent).
+     1   F3BB:19                 DAD     D
+     1   F3BC:7E                 MOV     A,M
+     1   F3BD:87                 ADD     A       ;and shift it left 4 bits (bits 4-7).
+     1   F3BE:87                 ADD     A
+     1   F3BF:87                 ADD     A
+     1   F3C0:87                 ADD     A
+     1   F3C1:F5                 PUSH    PSW     ;save carry flag (bit 0 of flag byte).
+     1   F3C2:80                 ADD     B       ;now add extra extent into 'r1'.
+     1   F3C3:47                 MOV     B,A
+     1   F3C4:F5                 PUSH    PSW     ;and save carry (overflow byte 'r2').
+     1   F3C5:E1                 POP     H       ;bit 0 of (L) is the overflow indicator.
+     1   F3C6:7D                 MOV     A,L
+     1   F3C7:E1                 POP     H       ;and same for first carry flag.
+     1   F3C8:B5                 ORA     L       ;either one of these set?
+     1   F3C9:E601               ANI     01H     ;only check the carry flags.
+     1   F3CB:C9                 RET
+     1                   ;
+     1                   ;   Routine to setup the fcb (bytes 'r0', 'r1', 'r2') to
+     1                   ; reflect the last record used for a random (or other) file.
+     1                   ; This reads the directory and looks at all extents computing
+     1                   ; the largerst record number for each and keeping the maximum
+     1                   ; value only. Then 'r0', 'r1', and 'r2' will reflect this
+     1                   ; maximum record number. This is used to compute the space used
+     1                   ; by a random file.
+     1                   ;
+     1                   RANSIZE:
+     1   F3CC:0E0C               MVI     C,12    ;look thru directory for first entry with
+     1   F3CE:CD12EF             CALL    FINDFST ;this name.
+     1   F3D1:2A3DEB             LHLD    PARAMS  ;zero out the 'r0, r1, r2' bytes.
+     1   F3D4:112100             LXI     D,33
+     1   F3D7:19                 DAD     D
+     1   F3D8:E5                 PUSH    H
+     1   F3D9:72                 MOV     M,D     ;note that (D)=0.
+     1   F3DA:23                 INX     H
+     1   F3DB:72                 MOV     M,D
+     1   F3DC:23                 INX     H
+     1   F3DD:72                 MOV     M,D
+     1                   RANSIZ1:
+     1   F3DE:CDEFED             CALL    CKFILPOS;is there an extent to process?
+     1   F3E1:CA06F4             JZ      RANSIZ3 ;no, we are done.
+     1   F3E4:CD58ED             CALL    FCB2HL  ;set (HL) pointing to proper fcb in dir.
+     1   F3E7:110F00             LXI     D,15    ;point to last record in extent.
+     1   F3EA:CD9FF3             CALL    COMPRAND;and compute random parameters.
+     1   F3ED:E1                 POP     H
+     1   F3EE:E5                 PUSH    H       ;now check these values against those
+     1   F3EF:5F                 MOV     E,A     ;already in fcb.
+     1   F3F0:79                 MOV     A,C     ;the carry flag will be set if those
+     1   F3F1:96                 SUB     M       ;in the fcb represent a larger size than
+     1   F3F2:23                 INX     H       ;this extent does.
+     1   F3F3:78                 MOV     A,B
+     1   F3F4:9E                 SBB     M
+     1   F3F5:23                 INX     H
+     1   F3F6:7B                 MOV     A,E
+     1   F3F7:9E                 SBB     M
+     1   F3F8:DA00F4             JC      RANSIZ2
+     1   F3FB:73                 MOV     M,E     ;we found a larger (in size) extent.
+     1   F3FC:2B                 DCX     H       ;stuff these values into fcb.
+     1   F3FD:70                 MOV     M,B
+     1   F3FE:2B                 DCX     H
+     1   F3FF:71                 MOV     M,C
+     1                   RANSIZ2:
+     1   F400:CD27EF             CALL    FINDNXT ;now get the next extent.
+     1   F403:C3DEF3             JMP     RANSIZ1 ;continue til all done.
+     1                   RANSIZ3:
+     1   F406:E1                 POP     H       ;we are done, restore the stack and
+     1   F407:C9                 RET             ;return.
+     1                   ;
+     1                   ;   Function to return the random record position of a given
+     1                   ; file which has been read in sequential mode up to now.
+     1                   ;
+     1                   SETRAN:
+     1   F408:2A3DEB             LHLD    PARAMS  ;point to fcb.
+     1   F40B:112000             LXI     D,32    ;and to last used record.
+     1   F40E:CD9FF3             CALL    COMPRAND;compute random position.
+     1   F411:212100             LXI     H,33    ;now stuff these values into fcb.
+     1   F414:19                 DAD     D
+     1   F415:71                 MOV     M,C     ;move 'r0'.
+     1   F416:23                 INX     H
+     1   F417:70                 MOV     M,B     ;and 'r1'.
+     1   F418:23                 INX     H
+     1   F419:77                 MOV     M,A     ;and lastly 'r2'.
+     1   F41A:C9                 RET
+     1                   ;
+     1                   ;   This routine select the drive specified in (ACTIVE) and
+     1                   ; update the login vector and bitmap table if this drive was
+     1                   ; not already active.
+     1                   ;
+     1                   LOGINDRV:
+     1   F41B:2AA9F5             LHLD    LOGIN   ;get the login vector.
+     1   F41E:3A3CEB             LDA     ACTIVE  ;get the default drive.
+     1   F421:4F                 MOV     C,A
+     1   F422:CDE4EC             CALL    SHIFTR  ;position active bit for this drive
+     1   F425:E5                 PUSH    H       ;into bit 0.
+     1   F426:EB                 XCHG
+     1   F427:CD53EB             CALL    SELECT  ;select this drive.
+     1   F42A:E1                 POP     H
+     1   F42B:CC41EB             CZ      SLCTERR ;valid drive?
+     1   F42E:7D                 MOV     A,L     ;is this a newly activated drive?
+     1   F42F:1F                 RAR
+     1   F430:D8                 RC
+     1   F431:2AA9F5             LHLD    LOGIN   ;yes, update the login vector.
+     1   F434:4D                 MOV     C,L
+     1   F435:44                 MOV     B,H
+     1   F436:CD05ED             CALL    SETBIT
+     1   F439:22A9F5             SHLD    LOGIN   ;and save.
+     1   F43C:C39DEE             JMP     BITMAP  ;now update the bitmap.
+     1                   ;
+     1                   ;   Function to set the active disk number.
+     1                   ;
+     1                   SETDSK:
+     1   F43F:3AD0F5             LDA     EPARAM  ;get parameter passed and see if this
+     1   F442:213CEB             LXI     H,ACTIVE;represents a change in drives.
+     1   F445:BE                 CMP     M
+     1   F446:C8                 RZ
+     1   F447:77                 MOV     M,A     ;yes it does, log it in.
+     1   F448:C31BF4             JMP     LOGINDRV
+     1                   ;
+     1                   ;   This is the 'auto disk select' routine. The firsst byte
+     1                   ; of the fcb is examined for a drive specification. If non
+     1                   ; zero then the drive will be selected and loged in.
+     1                   ;
+     1                   AUTOSEL:
+     1   F44B:3EFF               MVI     A,0FFH  ;say 'auto-select activated'.
+     1   F44D:32D8F5             STA     AUTO
+     1   F450:2A3DEB             LHLD    PARAMS  ;get drive specified.
+     1   F453:7E                 MOV     A,M
+     1   F454:E61F               ANI     1FH     ;look at lower 5 bits.
+     1   F456:3D                 DCR     A       ;adjust for (1=A, 2=B) etc.
+     1   F457:32D0F5             STA     EPARAM  ;and save for the select routine.
+     1   F45A:FE1E               CPI     1EH     ;check for 'no change' condition.
+     1   F45C:D26FF4             JNC     AUTOSL1 ;yes, don't change.
+     1   F45F:3A3CEB             LDA     ACTIVE  ;we must change, save currently active
+     1   F462:32D9F5             STA     OLDDRV  ;drive.
+     1   F465:7E                 MOV     A,M     ;and save first byte of fcb also.
+     1   F466:32DAF5             STA     AUTOFLAG;this must be non-zero.
+     1   F469:E6E0               ANI     0E0H    ;whats this for (bits 6,7 are used for
+     1   F46B:77                 MOV     M,A     ;something)?
+     1   F46C:CD3FF4             CALL    SETDSK  ;select and log in this drive.
+     1                   AUTOSL1:
+     1   F46F:3A3BEB             LDA     USERNO  ;move user number into fcb.
+     1   F472:2A3DEB             LHLD    PARAMS  ;(* upper half of first byte *)
+     1   F475:B6                 ORA     M
+     1   F476:77                 MOV     M,A
+     1   F477:C9                 RET             ;and return (all done).
+     1                   ;
+     1                   ;   Function to return the current cp/m version number.
+     1                   ;
+     1                   GETVER:
+     1   F478:3E22               MVI     A,022h  ;version 2.2
+     1   F47A:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   ;   Function to reset the disk system.
+     1                   ;
+     1                   RSTDSK:
+     1   F47D:210000             LXI     H,0     ;clear write protect status and log
+     1   F480:22A7F5             SHLD    WRTPRT  ;in vector.
+     1   F483:22A9F5             SHLD    LOGIN
+     1   F486:AF                 XRA     A       ;select drive 'A'.
+     1   F487:323CEB             STA     ACTIVE
+     1   F48A:218000             LXI     H,TBUFF ;setup default dma address.
+     1   F48D:22ABF5             SHLD    USERDMA
+     1   F490:CDD4ED             CALL    DEFDMA
+     1   F493:C31BF4             JMP     LOGINDRV;now log in drive 'A'.
+     1                   ;
+     1                   ;   Function to open a specified file.
+     1                   ;
+     1                   OPENFIL:
+     1   F496:CD6CED             CALL    CLEARS2 ;clear 's2' byte.
+     1   F499:CD4BF4             CALL    AUTOSEL ;select proper disk.
+     1   F49C:C34BF0             JMP     OPENIT  ;and open the file.
+     1                   ;
+     1                   ;   Function to close a specified file.
+     1                   ;
+     1                   CLOSEFIL:
+     1   F49F:CD4BF4             CALL    AUTOSEL ;select proper disk.
+     1   F4A2:C39CF0             JMP     CLOSEIT ;and close the file.
+     1                   ;
+     1                   ;   Function to return the first occurence of a specified file
+     1                   ; name. If the first byte of the fcb is '?' then the name will
+     1                   ; not be checked (get the first entry no matter what).
+     1                   ;
+     1                   GETFST:
+     1   F4A5:0E00               MVI     C,0     ;prepare for special search.
+     1   F4A7:EB                 XCHG
+     1   F4A8:7E                 MOV     A,M     ;is first byte a '?'?
+     1   F4A9:FE3F               CPI     '?'
+     1   F4AB:CABCF4             JZ      GETFST1 ;yes, just get very first entry (zero length match).
+     1   F4AE:CDA0EC             CALL    SETEXT  ;get the extension byte from fcb.
+     1   F4B1:7E                 MOV     A,M     ;is it '?'? if yes, then we want
+     1   F4B2:FE3F               CPI     '?'     ;an entry with a specific 's2' byte.
+     1   F4B4:C46CED             CNZ     CLEARS2 ;otherwise, look for a zero 's2' byte.
+     1   F4B7:CD4BF4             CALL    AUTOSEL ;select proper drive.
+     1   F4BA:0E0F               MVI     C,15    ;compare bytes 0-14 in fcb (12&13 excluded).
+     1                   GETFST1:
+     1   F4BC:CD12EF             CALL    FINDFST ;find an entry and then move it into
+     1   F4BF:C3E3ED             JMP     MOVEDIR ;the users dma space.
+     1                   ;
+     1                   ;   Function to return the next occurence of a file name.
+     1                   ;
+     1                   GETNXT:
+     1   F4C2:2AD3F5             LHLD    SAVEFCB ;restore pointers. note that no
+     1   F4C5:223DEB             SHLD    PARAMS  ;other dbos calls are allowed.
+     1   F4C8:CD4BF4             CALL    AUTOSEL ;no error will be returned, but the
+     1   F4CB:CD27EF             CALL    FINDNXT ;results will be wrong.
+     1   F4CE:C3E3ED             JMP     MOVEDIR
+     1                   ;
+     1                   ;   Function to delete a file by name.
+     1                   ;
+     1                   DELFILE:
+     1   F4D1:CD4BF4             CALL    AUTOSEL ;select proper drive.
+     1   F4D4:CD96EF             CALL    ERAFILE ;erase the file.
+     1   F4D7:C3FBEE             JMP     STSTATUS;set status and return.
+     1                   ;
+     1                   ;   Function to execute a sequential read of the specified
+     1                   ; record number.
+     1                   ;
+     1                   READSEQ:
+     1   F4DA:CD4BF4             CALL    AUTOSEL ;select proper drive then read.
+     1   F4DD:C3B6F1             JMP     RDSEQ
+     1                   ;
+     1                   ;   Function to write the net sequential record.
+     1                   ;
+     1                   WRTSEQ:
+     1   F4E0:CD4BF4             CALL    AUTOSEL ;select proper drive then write.
+     1   F4E3:C3F8F1             JMP     WTSEQ
+     1                   ;
+     1                   ;   Create a file function.
+     1                   ;
+     1                   FCREATE:
+     1   F4E6:CD6CED             CALL    CLEARS2 ;clear the 's2' byte on all creates.
+     1   F4E9:CD4BF4             CALL    AUTOSEL ;select proper drive and get the next
+     1   F4EC:C31EF1             JMP     GETEMPTY;empty directory space.
+     1                   ;
+     1                   ;   Function to rename a file.
+     1                   ;
+     1                   RENFILE:
+     1   F4EF:CD4BF4             CALL    AUTOSEL ;select proper drive and then switch
+     1   F4F2:CD10F0             CALL    CHGNAMES;file names.
+     1   F4F5:C3FBEE             JMP     STSTATUS
+     1                   ;
+     1                   ;   Function to return the login vector.
+     1                   ;
+     1                   GETLOG:
+     1   F4F8:2AA9F5             LHLD    LOGIN
+     1   F4FB:C323F5             JMP     GETPRM1
+     1                   ;
+     1                   ;   Function to return the current disk assignment.
+     1                   ;
+     1                   GETCRNT:
+     1   F4FE:3A3CEB             LDA     ACTIVE
+     1   F501:C3FBEA             JMP     SETSTAT
+     1                   ;
+     1                   ;   Function to set the dma address.
+     1                   ;
+     1                   PUTDMA:
+     1   F504:EB                 XCHG
+     1   F505:22ABF5             SHLD    USERDMA ;save in our space and then get to
+     1   F508:C3D4ED             JMP     DEFDMA  ;the bios with this also.
+     1                   ;
+     1                   ;   Function to return the allocation vector.
+     1                   ;
+     1                   GETALOC:
+     1   F50B:2AB9F5             LHLD    ALOCVECT
+     1   F50E:C323F5             JMP     GETPRM1
+     1                   ;
+     1                   ;   Function to return the read-only status vector.
+     1                   ;
+     1                   GETROV:
+     1   F511:2AA7F5             LHLD    WRTPRT
+     1   F514:C323F5             JMP     GETPRM1
+     1                   ;
+     1                   ;   Function to set the file attributes (read-only, system).
+     1                   ;
+     1                   SETATTR:
+     1   F517:CD4BF4             CALL    AUTOSEL ;select proper drive then save attributes.
+     1   F51A:CD35F0             CALL    SAVEATTR
+     1   F51D:C3FBEE             JMP     STSTATUS
+     1                   ;
+     1                   ;   Function to return the address of the disk parameter block
+     1                   ; for the current drive.
+     1                   ;
+     1                   GETPARM:
+     1   F520:2AB5F5             LHLD    DISKPB
+     1                   GETPRM1:
+     1   F523:223FEB             SHLD    STATUS
+     1   F526:C9                 RET
+     1                   ;
+     1                   ;   Function to get or set the user number. If (E) was (FF)
+     1                   ; then this is a request to return the current user number.
+     1                   ; Else set the user number from (E).
+     1                   ;
+     1                   GETUSER:
+     1   F527:3AD0F5             LDA     EPARAM  ;get parameter.
+     1   F52A:FEFF               CPI     0FFH    ;get user number?
+     1   F52C:C235F5             JNZ     SETUSER
+     1   F52F:3A3BEB             LDA     USERNO  ;yes, just do it.
+     1   F532:C3FBEA             JMP     SETSTAT
+     1                   SETUSER:
+     1   F535:E61F               ANI     1FH     ;no, we should set it instead. keep low
+     1   F537:323BEB             STA     USERNO  ;bits (0-4) only.
+     1   F53A:C9                 RET
+     1                   ;
+     1                   ;   Function to read a random record from a file.
+     1                   ;
+     1                   RDRANDOM:
+     1   F53B:CD4BF4             CALL    AUTOSEL ;select proper drive and read.
+     1   F53E:C38DF3             JMP     READRAN
+     1                   ;
+     1                   ;   Function to compute the file size for random files.
+     1                   ;
+     1                   WTRANDOM:
+     1   F541:CD4BF4             CALL    AUTOSEL ;select proper drive and write.
+     1   F544:C396F3             JMP     WRITERAN
+     1                   ;
+     1                   ;   Function to compute the size of a random file.
+     1                   ;
+     1                   FILESIZE:
+     1   F547:CD4BF4             CALL    AUTOSEL ;select proper drive and check file length
+     1   F54A:C3CCF3             JMP     RANSIZE
+     1                   ;
+     1                   ;   Function #37. This allows a program to log off any drives.
+     1                   ; On entry, set (DE) to contain a word with bits set for those
+     1                   ; drives that are to be logged off. The log-in vector and the
+     1                   ; write protect vector will be updated. This must be a M/PM
+     1                   ; special function.
+     1                   ;
+     1                   LOGOFF:
+     1   F54D:2A3DEB             LHLD    PARAMS  ;get drives to log off.
+     1   F550:7D                 MOV     A,L     ;for each bit that is set, we want
+     1   F551:2F                 CMA             ;to clear that bit in (LOGIN)
+     1   F552:5F                 MOV     E,A     ;and (WRTPRT).
+     1   F553:7C                 MOV     A,H
+     1   F554:2F                 CMA
+     1   F555:2AA9F5             LHLD    LOGIN   ;reset the login vector.
+     1   F558:A4                 ANA     H
+     1   F559:57                 MOV     D,A
+     1   F55A:7D                 MOV     A,L
+     1   F55B:A3                 ANA     E
+     1   F55C:5F                 MOV     E,A
+     1   F55D:2AA7F5             LHLD    WRTPRT
+     1   F560:EB                 XCHG
+     1   F561:22A9F5             SHLD    LOGIN   ;and save.
+     1   F564:7D                 MOV     A,L     ;now do the write protect vector.
+     1   F565:A3                 ANA     E
+     1   F566:6F                 MOV     L,A
+     1   F567:7C                 MOV     A,H
+     1   F568:A2                 ANA     D
+     1   F569:67                 MOV     H,A
+     1   F56A:22A7F5             SHLD    WRTPRT  ;and save. all done.
+     1   F56D:C9                 RET
+     1                   ;
+     1                   ;   Get here to return to the user.
+     1                   ;
+     1   F56E:3AD8F5     GOBACK: LDA     AUTO    ;was auto select activated?
+     1   F571:B7                 ORA     A
+     1   F572:CA8BF5             JZ      GOBACK1
+     1   F575:2A3DEB             LHLD    PARAMS  ;yes, but was a change made?
+     1   F578:3600               MVI     M,0     ;(* reset first byte of fcb *)
+     1   F57A:3ADAF5             LDA     AUTOFLAG
+     1   F57D:B7                 ORA     A
+     1   F57E:CA8BF5             JZ      GOBACK1
+     1   F581:77                 MOV     M,A     ;yes, reset first byte properly.
+     1   F582:3AD9F5             LDA     OLDDRV  ;and get the old drive and select it.
+     1   F585:32D0F5             STA     EPARAM
+     1   F588:CD3FF4             CALL    SETDSK
+     1                   GOBACK1:
+     1   F58B:2A09EB             LHLD    USRSTACK;reset the users stack pointer.
+     1   F58E:F9                 SPHL
+     1   F58F:2A3FEB             LHLD    STATUS  ;get return status.
+     1   F592:7D                 MOV     A,L     ;force version 1.4 compatability.
+     1   F593:44                 MOV     B,H
+     1   F594:C9                 RET             ;and go back to user.
+     1                   ;
+     1                   ;   Function #40. This is a special entry to do random i/o.
+     1                   ; For the case where we are writing to unused disk space, this
+     1                   ; space will be zeroed out first. This must be a M/PM special
+     1                   ; purpose function, because why would any normal program even
+     1                   ; care about the previous contents of a sector about to be
+     1                   ; written over.
+     1                   ;
+     1   F595:CD4BF4     WTSPECL:CALL    AUTOSEL ;select proper drive.
+     1   F598:3E02               MVI     A,2     ;use special write mode.
+     1   F59A:32CFF5             STA     MODE
+     1   F59D:0E00               MVI     C,0     ;set write indicator.
+     1   F59F:CD01F3             CALL    POSITN1 ;position the file.
+     1   F5A2:CCFDF1             CZ      WTSEQ1  ;and write (if no errors).
+     1   F5A5:C9                 RET
+     1                   ;
+     1                   ;**************************************************************
+     1                   ;*
+     1                   ;*     BDOS data storage pool.
+     1                   ;*
+     1                   ;**************************************************************
+     1                   ;
+     1   F5A6:E5         EMPTYFCB:       DB      0E5H    ;empty directory segment indicator.
+     1   F5A7:0000       WRTPRT:         DW      0       ;write protect status for all 16 drives.
+     1   F5A9:0000       LOGIN:          DW      0       ;drive active word (1 bit per drive).
+     1   F5AB:8000       USERDMA:DW      080H    ;user's dma address (defaults to 80h).
+     1                   ;
+     1                   ;   Scratch areas from parameter block.
+     1                   ;
+     1   F5AD:0000       SCRATCH1:       DW      0       ;relative position within dir segment for file (0-3).
+     1   F5AF:0000       SCRATCH2:       DW      0       ;last selected track number.
+     1   F5B1:0000       SCRATCH3:       DW      0       ;last selected sector number.
+     1                   ;
+     1                   ;   Disk storage areas from parameter block.
+     1                   ;
+     1   F5B3:0000       DIRBUF:         DW      0       ;address of directory buffer to use.
+     1   F5B5:0000       DISKPB:         DW      0       ;contains address of disk parameter block.
+     1   F5B7:0000       CHKVECT:DW      0       ;address of check vector.
+     1   F5B9:0000       ALOCVECT:       DW      0       ;address of allocation vector (bit map).
+     1                   ;
+     1                   ;   Parameter block returned from the bios.
+     1                   ;
+     1   F5BB:0000       SECTORS:DW      0       ;sectors per track from bios.
+     1   F5BD:00         BLKSHFT:DB      0       ;block shift.
+     1   F5BE:00         BLKMASK:DB      0       ;block mask.
+     1   F5BF:00         EXTMASK:DB      0       ;extent mask.
+     1   F5C0:0000       DSKSIZE:DW      0       ;disk size from bios (number of blocks-1).
+     1   F5C2:0000       DIRSIZE:DW      0       ;directory size.
+     1   F5C4:0000       ALLOC0:         DW      0       ;storage for first bytes of bit map (dir space used).
+     1   F5C6:0000       ALLOC1:         DW      0
+     1   F5C8:0000       OFFSET:         DW      0       ;first usable track number.
+     1   F5CA:0000       XLATE:          DW      0       ;sector translation table address.
+     1                   ;
+     1                   ;
+     1   F5CC:00         CLOSEFLG:       DB      0       ;close flag (=0ffh is extent written ok).
+     1   F5CD:00         RDWRTFLG:       DB      0       ;read/write flag (0ffh=read, 0=write).
+     1   F5CE:00         FNDSTAT:DB      0       ;filename found status (0=found first entry).
+     1   F5CF:00         MODE:           DB      0       ;I/o mode select (0=random, 1=sequential, 2=special random).
+     1   F5D0:00         EPARAM:         DB      0       ;storage for register (E) on entry to bdos.
+     1   F5D1:00         RELBLOCK:       DB      0       ;relative position within fcb of block number written.
+     1   F5D2:00         COUNTER:DB      0       ;byte counter for directory name searches.
+     1   F5D3:00000000   SAVEFCB:DW      0,0     ;save space for address of fcb (for directory searches).
+     1   F5D7:00         BIGDISK:DB      0       ;if =0 then disk is > 256 blocks long.
+     1   F5D8:00         AUTO:           DB      0       ;if non-zero, then auto select activated.
+     1   F5D9:00         OLDDRV:         DB      0       ;on auto select, storage for previous drive.
+     1   F5DA:00         AUTOFLAG:       DB      0       ;if non-zero, then auto select changed drives.
+     1   F5DB:00         SAVNXT:         DB      0       ;storage for next record number to access.
+     1   F5DC:00         SAVEXT:         DB      0       ;storage for extent number of file.
+     1   F5DD:0000       SAVNREC:DW      0       ;storage for number of records in file.
+     1   F5DF:0000       BLKNMBR:DW      0       ;block number (physical sector) used within a file or logical sector.
+     1   F5E1:0000       LOGSECT:DW      0       ;starting logical (128 byte) sector of block (physical sector).
+     1   F5E3:00         FCBPOS:         DB      0       ;relative position within buffer for fcb of file of interest.
+     1   F5E4:0000       FILEPOS:DW      0       ;files position within directory (0 to max entries -1).
+     1                   ;
+     1                   ;   Disk directory buffer checksum bytes. One for each of the
+     1                   ; 16 possible drives.
+     1                   ;
+     1   F5E6:0000000000 CKSUMTBL:DB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+     1                   ;**************************************************************
+     1                   ;*
+     1                   ;*        B I O S   J U M P   T A B L E
+     1                   ;*
+     1                   ;**************************************************************
+     1                           org     0f600h
+     1   F600:C3B4F6     BOOT:   JMP     biosColdBoot
+     1   F603:C335F6     WBOOT:  JMP     biosWarmBoot
+     1   F606:C3BCF6     CONST:  JMP     biosConsoleCheck
+     1   F609:C3C7F6     CONIN:  JMP     biosConsoleIn
+     1   F60C:C3CAF6     CONOUT: JMP     biosConsoleOut
+     1   F60F:C333F6     LIST:   JMP     Dummy
+     1   F612:C333F6     PUNCH:  JMP     Dummy
+     1   F615:C333F6     READER: JMP     Dummy
+     1   F618:C38CF7     HOME:   JMP     biosHome
+     1   F61B:C39CF7     SELDSK: JMP     biosSELDSK
+     1   F61E:C392F7     SETTRK: JMP     biosSetTrack
+     1   F621:C397F7     SETSEC: JMP     biosSetSector
+     1   F624:C383F7     SETDMA: JMP     biosSETDMA
+     1   F627:C3EFF6     READ:   JMP     biosRead
+     1   F62A:C3CEF6     WRITE:  JMP     biosWrite
+     1   F62D:C333F6     PRSTAT: JMP     Dummy
+     1   F630:C389F7     SECTRN: JMP     biosSSECTRN
+     1                   JMP_INSTR       equ     0c3h
+     1                   ;******************   Start of BIOS   *****************
+     1                   Dummy:
+     1   F633:AF                 xra     a
+     1   F634:C9                 ret
+     1                   biosWarmBoot:
+     1                   ; zero the first 256 bytes of RAM
+     1   F635:210000             lxi     h,0
+     1   F638:010001             lxi     b,256
+     1                   @@:
+     1   F63B:3600               mvi     m,0
+     1   F63D:23                 inx     h
+     1   F63E:0B                 dcx     b
+     1   F63F:78                 mov     a,b
+     1   F640:B1                 ora     c
+     1   F641:C23BF6             jnz     @B
+     1   F644:CD06F9             call    UartInit
+     1   F647:019EF6             lxi     b,warmboot
+     1   F64A:CDCDE9             call    PRTMESG
+     1                   ; load CCP from track 0 of a: into memory
+     1   F64D:3AB6F7             lda             DISKNO
+     1   F650:F5                 push    psw
+     1   F651:011000             lxi             b,((2*1024)/128)
+     1   F654:3E00               mvi             a,0
+     1   F656:32B6F7             sta             DISKNO
+     1   F659:32B2F7             sta             TRACK
+     1   F65C:32B3F7             sta             SECTOR
+     1   F65F:2100E0             lxi             h,CCP
+     1   F662:22B4F7             shld    DMAAD
+     1                   @@:
+     1   F665:C5                 push    b
+     1   F666:CDEFF6             call    biosRead
+     1   F669:C1                 pop             b
+     1   F66A:3AB3F7             lda             SECTOR
+     1   F66D:3C                 inr             a
+     1   F66E:32B3F7             sta             SECTOR
+     1   F671:2AB4F7             lhld    DMAAD
+     1   F674:118000             lxi             d,128
+     1   F677:19                 dad             d
+     1   F678:22B4F7             shld    DMAAD
+     1   F67B:0B                 dcx             b
+     1   F67C:78                 mov             a,b
+     1   F67D:B1                 ora             c
+     1   F67E:C265F6             jnz             @B
+     1                   ;;set warm boot vector (0000h)
+     1   F681:210000             lxi     h,0000h
+     1   F684:0103F6             lxi     b,WBOOT
+     1   F687:36C3               mvi     m, JMP_INSTR
+     1   F689:23                 inx     h
+     1   F68A:71                 mov     m,c
+     1   F68B:23                 inx     h
+     1   F68C:70                 mov     m,b
+     1                   ;;set BDOS entry vector
+     1   F68D:210500             lxi     h,0005h
+     1   F690:0100E8             lxi     b,fbase
+     1   F693:36C3               mvi     m, JMP_INSTR
+     1   F695:23                 inx     h
+     1   F696:71                 mov     m,c
+     1   F697:23                 inx     h
+     1   F698:70                 mov     m,b
+     1   F699:F1                 pop     psw
+     1   F69A:4F                 mov             c,a
+     1   F69B:C300E0             jmp             CCP
+     1   F69E:5761726D20 warmboot:       db      'Warm booting CPM ....', '$' 
+     1                   ;;tstack:               dw      0
+     1                   biosColdBoot:
+     1   F6B4:F3                 di
+     1   F6B5:3E18               mvi             a,18h                   ; activate ROM, enable ROM Boot
+     1   F6B7:D302               out             02h
+     1   F6B9:C30000             jmp             0
+     1                   ;;;Returns A=0 if no characters are waiting, nonzero if a character is waiting.
+     1                   biosConsoleCheck:
+     1   F6BC:CD1AF9             call    UartStatus
+     1   F6BF:CAC5F6             jz      @F
+     1   F6C2:3EFF               mvi     a,0ffh
+     1   F6C4:C9                 ret
+     1                   @@:
+     1   F6C5:AF                 xra     a
+     1   F6C6:C9                 ret
+     1                   biosConsoleIn:
+     1   F6C7:C31FF9             jmp     UartRead
+     1                   biosConsoleOut:
+     1   F6CA:79                 mov     a,c
+     1   F6CB:C328F9             jmp     UartWrite
+     1                   biosWrite:
+     1                   ;       lxi     h,0
+     1                   ;       dad     sp
+     1                   ;       shld    tstack
+     1                   ;       lxi     sp,myStack
+     1   F6CE:2146F7             lxi     h,cmdParams
+     1   F6D1:3604               mvi     m,4
+     1   F6D3:23                 inx     h
+     1   F6D4:3677               mvi     m,'w'
+     1   F6D6:23                 inx     h
+     1   F6D7:3AB6F7             lda     DISKNO
+     1   F6DA:77                 mov     m,a
+     1   F6DB:23                 inx     h
+     1   F6DC:3AB2F7             lda     TRACK
+     1   F6DF:77                 mov     m,a
+     1   F6E0:23                 inx     h
+     1   F6E1:3AB3F7             lda     SECTOR
+     1   F6E4:77                 mov     m,a
+     1   F6E5:2AB4F7             lhld    DMAAD
+     1   F6E8:0E80               mvi     c,128
+     1   F6EA:CD4BF7             call    sendcmd
+     1   F6ED:AF                 xra     a
+     1                   ;       lhld    tstack
+     1                   ;       sphl
+     1   F6EE:C9                 ret
+     1                   biosRead:
+     1                   ;       lxi     h,0
+     1                   ;       dad     sp
+     1                   ;       shld    tstack
+     1                   ;       lxi     sp,myStack
+     1   F6EF:2146F7             lxi     h,cmdParams
+     1   F6F2:3604               mvi     m,4
+     1   F6F4:23                 inx     h
+     1   F6F5:3672               mvi     m,'r'
+     1   F6F7:23                 inx     h
+     1   F6F8:3AB6F7             lda     DISKNO
+     1   F6FB:77                 mov     m,a
+     1   F6FC:23                 inx     h
+     1   F6FD:3AB2F7             lda     TRACK
+     1   F700:77                 mov     m,a
+     1   F701:23                 inx     h
+     1   F702:3AB3F7             lda     SECTOR
+     1   F705:77                 mov     m,a
+     1   F706:0E00               mvi     c,0
+     1   F708:CD4BF7             call    sendcmd
+     1   F70B:2AB4F7             lhld    DMAAD
+     1   F70E:0E80               mvi     c,128
+     1   F710:110000             lxi     d,0
+     1                   @@:
+     1   F713:CDC7F6             call    biosConsoleIn
+     1   F716:77                 mov     m,a
+     1   F717:83                 add     e
+     1   F718:5F                 mov     e,a
+     1   F719:7A                 mov     a,d
+     1   F71A:CE00               aci     0
+     1   F71C:57                 mov     d,a
+     1   F71D:23                 inx     h
+     1   F71E:0D                 dcr     c
+     1   F71F:C213F7             jnz     @B
+     1   F722:CDC7F6             call    biosConsoleIn
+     1   F725:4F                 mov     c,a
+     1   F726:CDC7F6             call    biosConsoleIn
+     1   F729:47                 mov     b,a
+     1                   ;; compare bc to de, should be the same
+     1   F72A:7B                 mov     a,e
+     1   F72B:B9                 cmp     c
+     1   F72C:C237F7             jnz     @F
+     1   F72F:7A                 mov     a,d
+     1   F730:B8                 cmp     b
+     1   F731:3E01               mvi     a,1
+     1   F733:C237F7             jnz     @F
+     1   F736:AF                 xra     a
+     1                   @@:
+     1                   ;       lhld    tstack
+     1                   ;       sphl
+     1   F737:C9                 ret
+     1                   diskioOutput:
+     1   F738:C5                 push    b
+     1   F739:4F                 mov     c,a
+     1                   @@:
+     1   F73A:DB01               in      01h
+     1   F73C:E601               ani     01h
+     1   F73E:CA3AF7             jz      @B
+     1   F741:79                 mov     a,c
+     1   F742:D300               out     00h
+     1   F744:C1                 pop     b
+     1   F745:C9                 ret
+     1                   cmdParams:
+     1   F746:0000000000                 db      0,0,0,0,0
+     1                   ; hl - data to send (if data length is 0, hl ignored)
+     1                   ; c  - dataLength
+     1                   sendcmd:
+     1   F74B:3E0D               mvi     a,0dh                   ; unmask rst 6.5 interrupt
+     1   F74D:30                 sim
+     1   F74E:FB                 ei
+     1   F74F:C5                 push    b
+     1   F750:D5                 push    d
+     1   F751:E5                 push    h
+     1   F752:3E1B               mvi             a,ESCAPE
+     1   F754:CD38F7             call    diskioOutput
+     1   F757:CD38F7             call    diskioOutput
+     1   F75A:1146F7             lxi             d,cmdParams
+     1   F75D:1A                 ldax    d
+     1   F75E:CD38F7             call    diskioOutput
+     1   F761:1A                 ldax    d
+     1   F762:13                 inx             d
+     1   F763:47                 mov             b,a
+     1                   snd05:
+     1   F764:1A                 ldax    d
+     1   F765:CD38F7             call    diskioOutput
+     1   F768:13                 inx             d
+     1   F769:05                 dcr             b
+     1   F76A:C264F7             jnz             snd05
+     1   F76D:79                 mov             a,c
+     1   F76E:CD38F7             call    diskioOutput
+     1   F771:79                 mov             a,c
+     1   F772:B7                 ora             a
+     1   F773:CA7FF7             jz              done
+     1                   snd10:
+     1   F776:7E                 mov             a,m
+     1   F777:CD38F7             call    diskioOutput
+     1   F77A:23                 inx             h
+     1   F77B:0D                 dcr             c
+     1   F77C:C276F7             jnz             snd10
+     1                   done:
+     1   F77F:E1                 pop             h
+     1   F780:D1                 pop             d
+     1   F781:C1                 pop             b
+     1   F782:C9                 ret
+     1                   biosSETDMA:             ;SET    DMA ADDRESS GIVEN BY REGISTERS B AND C
+     1   F783:C5                 push    b
+     1   F784:E1                 pop     h
+     1   F785:22B4F7             shld    DMAAD
+     1   F788:C9                 ret
+     1                   ;TRANSLATE THE SECTOR GIVEN BY BC USING THE
+     1                   ;TRANSLATE TABLE GIVEN BY DE
+     1                   biosSSECTRN:
+     1   F789:C5                 push    b
+     1   F78A:E1                 pop     h
+     1   F78B:C9                 ret
+     1                   biosHome:
+     1   F78C:3E00               mvi     a,0
+     1   F78E:32B2F7             sta     TRACK
+     1   F791:C9                 ret
+     1                   biosSetTrack:
+     1   F792:79                 mov     a,c
+     1   F793:32B2F7             sta     TRACK
+     1   F796:C9                 ret
+     1                   biosSetSector:
+     1   F797:79                 mov     a,c
+     1   F798:32B3F7             sta     SECTOR
+     1   F79B:C9                 ret
+     1                   biosSELDSK:                     ;SELECT DISK GIVEN BY REGISTER C
+     1   F79C:210000             lxi     h,0
+     1   F79F:79                 mov     a,c
+     1   F7A0:FE04               cpi     4
+     1   F7A2:D0                 rnc
+     1   F7A3:32B6F7             sta     DISKNO
+     1                   ;       COMPUTE PROPER DISK PARAMETER HEADER ADDRESS
+     1   F7A6:6F                 mov     l,a
+     1   F7A7:2600               mvi     h,0
+     1   F7A9:29                 dad     h       ; *2
+     1   F7AA:29                 dad     h       ; *4
+     1   F7AB:29                 dad     h       ; *8
+     1   F7AC:29                 dad     h       ; *16
+     1   F7AD:11B7F7             lxi     d,DPBASE
+     1   F7B0:19                 dad     d
+     1   F7B1:C9                 ret
+     1   F7B2:00         TRACK:  DB      0               ;requested track numer(1-255) (first track resrved.
+     1   F7B3:00         SECTOR: DB      0               ;requested sector number (0-63)
+     1   F7B4:FFFF       DMAAD:  DS      2               ;DIRECT MEMORY ADDRESS
+     1   F7B6:00         DISKNO: DB      0               ;DISK NUMBER 0-15
+     1                   ;       FIXED DATA TABLES FOR FOUR-DRIVE STANDARD
+     1                   ;       IBM-COMPATIBLE 8" DISKS
+     1                   ;       DISK PARAMETER HEADER FOR DISK 00
+     1                   DPBASE:
+     1                   ;DISK PARAMETER HEADER FOR DISK 01(A:)
+     1   F7B7:00000000           DW      0000H, 0000H
+     1   F7BB:00000000           DW      0000H, 0000H
+     1   F7BF:06F8F7F7           DW      DIRBF, DPBLK
+     1   F7C3:000086F8           DW      0000H, ALL00
+     1                   ;DISK PARAMETER HEADER FOR DISK 01(B:)
+     1   F7C7:00000000           DW      0000H, 0000H
+     1   F7CB:00000000           DW      0000H, 0000H
+     1   F7CF:06F8F7F7           DW      DIRBF, DPBLK
+     1   F7D3:0000A6F8           DW      0000H, ALL01
+     1                   ;DISK PARAMETER HEADER FOR DISK 02(C:)
+     1   F7D7:00000000           DW      0000H, 0000H
+     1   F7DB:00000000           DW      0000H, 0000H
+     1   F7DF:06F8F7F7           DW      DIRBF, DPBLK
+     1   F7E3:0000C6F8           DW      0000H, ALL02
+     1                   ;DISK PARAMETER HEADER FOR DISK 03(D:)
+     1   F7E7:00000000           DW      0000H, 0000H
+     1   F7EB:00000000           DW      0000H, 0000H
+     1   F7EF:06F8F7F7           DW      DIRBF, DPBLK
+     1   F7F3:0000E6F8           DW      0000H, ALL03
+     1                   ; 1024 - 3,7
+     1                   ; 2048 - 5, 15
+     1                   ; 4096 - 5,31
+     1                   ; 8192 - 6, 63
+     1                   ; 16384 - 7,127
+     1                   ;DISK PARAMETER BLOCK, COMMON TO ALL DISKS
+     1                   DPBLK:
+     1   F7F7:4000               DW      64              ;SECTORS PER TRACK - 8k bytes per track
+     1   F7F9:06                 DB      6               ;BLOCK SHIFT FACTOR == 8kb per block
+     1   F7FA:3F                 DB      63              ;BLOCK MASK == 8kb per block
+     1   F7FB:00                 DB      0               ;EXM
+     1   F7FC:FA00               DW      250             ;DISK SIZE-1
+     1   F7FE:FF00               DW      255             ;DIRECTORY MAX
+     1   F800:80                 DB      080h            ;ALLOC 0
+     1   F801:00                 DB      0               ;ALLOC 1
+     1   F802:0000               DW      0               ;CHECK SIZE
+     1   F804:0100               DW      1               ;TRACK OFFSET
+     1                   ;END OF FIXED TABLES
+     1   F806:FFFFFFFFFF DIRBF:  DS      128             ;SCRATCH DIRECTORY AREA
+     1   F886:FFFFFFFFFF ALL00:  DS      32              ;ALLOCATION VECTOR 0
+     1   F8A6:FFFFFFFFFF ALL01:  DS      32              ;ALLOCATION VECTOR 1
+     1   F8C6:FFFFFFFFFF ALL02:  DS      32              ;ALLOCATION VECTOR 2
+     1   F8E6:FFFFFFFFFF ALL03:  DS      32              ;ALLOCATION VECTOR 3
+     1                   ;;;     ds      128
+     1                   ;;;myStack      equ     $
+     1                   ;RESET_65       equ     034h
+     1                   ;JMP_INSTR      equ     0c3h
+     1                   UART_DATA_PORT          equ     00h
+     1                   UART_STATUS_PORTequ     01h
+     1                   UART_TX_READY           equ     01h
+     1                   UART_RX_READY           equ     02h
+     1                   UartInit:
+     1   F906:2114F9             lxi     h,uart
+     1   F909:0E06               mvi     c, UART_SIZE
+     1                   @@:
+     1   F90B:7E                 mov     a,m
+     1   F90C:D301               out     UART_STATUS_PORT
+     1   F90E:23                 inx     h
+     1   F90F:0D                 dcr     c
+     1   F910:C20BF9             jnz     @B
+     1                   ;       call    UartResetBuffer
+     1                   ;       mvi     a,JMP_INSTR;
+     1                   ;       sta     RESET_65
+     1                   ;       lxi     h,UartRxInt
+     1                   ;       shld    RESET_65+1
+     1                   ;       lxi     h,rx_buffer
+     1                   ;       mvi     a,0dh                   ; unmask rst 6.5 interrupt
+     1                   ;       sim
+     1                   ;       ei
+     1   F913:C9                 ret
+     1   F914:000000404E uart:   db      0,0,0,40h,4eh,37h
+     1                   UART_SIZE       equ     $-uart
+     1                   ;UartResetBuffer:
+     1                   ;       push    h
+     1                   ;       mvi     h,BUFFER_PAGE
+     1                   ;       mvi     l,0
+     1                   ;@@:
+     1                   ;       mvi     m,0aah
+     1                   ;       inx     h
+     1                   ;       mov     a,l
+     1                   ;       ora     a
+     1                   ;       jnz     @B
+     1                   ;       sta     rx_begin
+     1                   ;       sta     rx_end
+     1                   ;       pop     h
+     1                   ;       ret
+     1                   ;UartRxInt:
+     1                   ;       push    psw
+     1                   ;       push    h
+     1                   ;       mvi     h,BUFFER_PAGE
+     1                   ;       lda     rx_end
+     1                   ;       mov     l,a
+     1                   ;       in      UART_DATA_PORT
+     1                   ;       mov     m,a
+     1                   ;       inx     h
+     1                   ;       mov     a,l
+     1                   ;       sta     rx_end
+     1                   ;       pop     h
+     1                   ;       pop     psw
+     1                   ;       ei
+     1                   ;       ret
+     1                   UartStatus:
+     1                   UartStatusRx:
+     1   F91A:DB01               in      UART_STATUS_PORT
+     1   F91C:E602               ani     UART_RX_READY
+     1   F91E:C9                 ret
+     1                   ;UartStatusRx:
+     1                   ;       push    b
+     1                   ;       lda     rx_begin
+     1                   ;       mov     b,a
+     1                   ;       lda     rx_end
+     1                   ;       cmp     b
+     1                   ;       pop     b
+     1                   ;       ret
+     1                   ;UartRead:
+     1                   ;       call    UartStatusRx
+     1                   ;       jz      UartRead
+     1                   ;       push    b
+     1                   ;       push    h
+     1                   ;       mvi     h,BUFFER_PAGE
+     1                   ;       lda     rx_begin
+     1                   ;       mov     l,a
+     1                   ;       mov     b,m
+     1                   ;       inx     h
+     1                   ;       mov     a,l
+     1                   ;       sta     rx_begin
+     1                   ;       mov     a,b
+     1                   ;       pop     h
+     1                   ;       pop     b
+     1                   ;       ret
+     1                   UartRead:
+     1   F91F:CD1AF9             call    UartStatusRx
+     1   F922:CA1FF9             jz      UartRead
+     1   F925:DB00               in      UART_DATA_PORT
+     1   F927:C9                 ret
+     1                   UartWrite:
+     1   F928:F5                 push    psw
+     1                   @@:
+     1   F929:DB01               in      UART_STATUS_PORT
+     1   F92B:E601               ani     UART_TX_READY
+     1   F92D:CA29F9             jz      @B
+     1   F930:F1                 pop     psw
+     1   F931:D300               out     UART_DATA_PORT
+     1   F933:C9                 ret
+     1                   ;rx_begin:      db      0
+     1                   ;rx_end:        db      0
+     1                   ;BUFFER_PAGE    equ     (($+255)/ 256)
+     1                   ;       org     BUFFER_PAGE*256
+     1                   ;rx_buffer:     ds      256

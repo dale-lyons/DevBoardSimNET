@@ -1,0 +1,1470 @@
+   e000                 CCP		EQU	0E000H
+   e800                 BDOS		EQU	0E800H
+                        
+                        ;**************************************************************
+                        ;*
+                        ;*             C P / M   version   2 . 2
+                        ;*
+                        ;*   Reconstructed from memory image on February 27, 1981
+                        ;*
+                        ;*                by Clark A. Calkins
+                        ;*
+                        ;**************************************************************
+   001b                 ESCAPE  EQU 	27
+   0003                 IOBYTE	EQU	3	;i/o definition byte.
+   0004                 TDRIVE	EQU	4	;current drive name and user number.
+   0005                 ENTRY	EQU	5	;entry point for the cp/m bdos.
+   005c                 TFCB	EQU	5CH	;default file control block.
+   0080                 TBUFF	EQU	80H	;i/o buffer and command line storage.
+   0100                 TBASE	EQU	100H	;transiant program storage area.
+                        ;
+                        ;   Set control character equates.
+                        ;
+   0003                 CNTRLC	EQU	3	;control-c
+   0005                 CNTRLE	EQU	05H	;control-e
+   0008                 BS	EQU	08H	;backspace
+   0009                 TAB	EQU	09H	;tab
+   000a                 LF	EQU	0AH	;line feed
+   000c                 FF	EQU	0CH	;form feed
+   000d                 CR	EQU	0DH	;carriage return
+   0010                 CNTRLP	EQU	10H	;control-p
+   0012                 CNTRLR	EQU	12H	;control-r
+   0013                 CNTRLS	EQU	13H	;control-s
+   0015                 CNTRLU	EQU	15H	;control-u
+   0018                 CNTRLX	EQU	18H	;control-x
+   001a                 CNTRLZ	EQU	1AH	;control-z (end-of-file mark)
+   007f                 DEL	EQU	7FH	;rubout
+                        
+   e000                 	ORG	CCP
+   e000                 CBASE:
+   e000   c3 43 e3      	JMP	COMMAND		;execute command processor (ccp).
+   e003   c3 3f e3      	JMP	CLEARBUF	;entry to empty input buffer before starting ccp.
+                        
+                        ;
+                        ;   Standard cp/m ccp input buffer. Format is (max length),
+                        ; (actual length), (char #1), (char #2), (char #3), etc.
+                        ;
+   e006   7f            INBUFF:		DB	127	;length of input buffer.
+   e007   00            		DB	0	;current length of contents.
+   e008   43 6f 70 79   		DB	'Copyright'
+   e00c   72 69 67 68   
+   e010   74            
+   e011   20 31 39 37   		DB	' 1979 (c) by Digital Research      '
+   e015   39 20 28 63   
+   e019   29 20 62 79   
+   e01d   20 44 69 67   
+   e021   69 74 61 6c   
+   e025   20 52 65 73   
+   e029   65 61 72 63   
+   e02d   68 20 20 20   
+   e031   20 20 20      
+   e034   00 00 00 00   		DB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+   e038   00 00 00 00   
+   e03c   00 00 00 00   
+   e040   00 00 00 00   
+   e044   00 00 00 00   
+   e048   00 00 00      
+   e04b   00 00 00 00   		DB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+   e04f   00 00 00 00   
+   e053   00 00 00 00   
+   e057   00 00 00 00   
+   e05b   00 00 00 00   
+   e05f   00 00 00      
+   e062   00 00 00 00   		DB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+   e066   00 00 00 00   
+   e06a   00 00 00 00   
+   e06e   00 00 00 00   
+   e072   00 00 00 00   
+   e076   00 00 00      
+   e079   00 00 00 00   		DB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+   e07d   00 00 00 00   
+   e081   00 00 00 00   
+   e085   00 00 00      
+   e088   08 e0         INPOINT:	DW	INBUFF+2;input line pointer
+   e08a   00 00         NAMEPNT:	DW	0	;input line pointer used for error message. Points to
+                        ;			;start of name in error.
+                        ;
+                        ;   Routine to print (A) on the console. All registers used.
+                        ;
+   e08c                 PRINT:
+   e08c   5f            	MOV	E,A	;setup bdos call.
+   e08d   0e 02         	MVI	C,2
+   e08f   c3 05 00      	JMP	ENTRY
+                        ;
+                        ;   Routine to print (A) on the console and to save (BC).
+                        ;
+   e092                 PRINTB:
+   e092   c5            	PUSH	B
+   e093   cd 8c e0      	CALL	PRINT
+   e096   c1            	POP	B
+   e097   c9            	RET
+                        ;
+                        ;   Routine to send a carriage return, line feed combination
+                        ; to the console.
+                        ;
+   e098                 CRLF:
+   e098   3e 0d         	MVI	A,CR
+   e09a   cd 92 e0      	CALL	PRINTB
+   e09d   3e 0a         	MVI	A,LF
+   e09f   c3 92 e0      	JMP	PRINTB
+                        ;
+                        ;   Routine to send one space to the console and save (BC).
+                        ;
+   e0a2                 SPACE:
+   e0a2   3e 20         	MVI	A,' '
+   e0a4   c3 92 e0      	JMP	PRINTB
+                        ;
+                        ;   Routine to print character string pointed to be (BC) on the
+                        ; console. It must terminate with a null byte.
+                        ;
+   e0a7                 PLINE:
+   e0a7   c5            	PUSH	B
+   e0a8   cd 98 e0      	CALL	CRLF
+   e0ab   e1            	POP	H
+   e0ac                 PLINE2:
+   e0ac   7e            	MOV	A,M
+   e0ad   b7            	ORA	A
+   e0ae   c8            	RZ
+   e0af   23            	INX	H
+   e0b0   e5            	PUSH	H
+   e0b1   cd 8c e0      	CALL	PRINT
+   e0b4   e1            	POP	H
+   e0b5   c3 ac e0      	JMP	PLINE2
+                        ;
+                        ;   Routine to reset the disk system.
+                        ;
+   e0b8                 RESDSK:
+   e0b8   0e 0d         	MVI	C,13
+   e0ba   c3 05 00      	JMP	ENTRY
+                        ;
+                        ;   Routine to select disk (A).
+                        ;
+   e0bd                 DSKSEL:
+   e0bd   5f            	MOV	E,A
+   e0be   0e 0e         	MVI	C,14
+   e0c0   c3 05 00      	JMP	ENTRY
+                        ;
+                        ;   Routine to call bdos and save the return code. The zero
+                        ; flag is set on a return of 0ffh.
+                        ;
+   e0c3                 ENTRY1:
+   e0c3   cd 05 00      	CALL	ENTRY
+   e0c6   32 d5 e7      	STA	RTNCODE	;save return code.
+   e0c9   3c            	INR	A	;set zero if 0ffh returned.
+   e0ca   c9            	RET
+                        ;
+                        ;   Routine to open a file. (DE) must point to the FCB.
+                        ;
+   e0cb                 OPEN:
+   e0cb   0e 0f         	MVI	C,15
+   e0cd   c3 c3 e0      	JMP	ENTRY1
+                        ;
+                        ;   Routine to open file at (FCB).
+                        ;
+   e0d0                 OPENFCB:
+   e0d0   af            	XRA	A	;clear the record number byte at fcb+32
+   e0d1   32 d4 e7      	STA	FCB+32
+   e0d4   11 b4 e7      	LXI	D,FCB
+   e0d7   c3 cb e0      	JMP	OPEN
+                        ;
+                        ;   Routine to close a file. (DE) points to FCB.
+                        ;
+   e0da                 CLOSE:
+   e0da   0e 10         	MVI	C,16
+   e0dc   c3 c3 e0      	JMP	ENTRY1
+                        ;
+                        ;   Routine to search for the first file with ambigueous name
+                        ; (DE).
+                        ;
+   e0df                 SRCHFST:
+   e0df   0e 11         	MVI	C,17
+   e0e1   c3 c3 e0      	JMP	ENTRY1
+                        ;
+                        ;   Search for the next ambigeous file name.
+                        ;
+   e0e4                 SRCHNXT:
+   e0e4   0e 12         	MVI	C,18
+   e0e6   c3 c3 e0      	JMP	ENTRY1
+                        ;
+                        ;   Search for file at (FCB).
+                        ;
+   e0e9                 SRCHFCB:
+   e0e9   11 b4 e7      	LXI	D,FCB
+   e0ec   c3 df e0      	JMP	SRCHFST
+                        ;
+                        ;   Routine to delete a file pointed to by (DE).
+                        ;
+   e0ef                 DELETE:
+   e0ef   0e 13         	MVI	C,19
+   e0f1   c3 05 00      	JMP	ENTRY
+                        ;
+                        ;   Routine to call the bdos and set the zero flag if a zero
+                        ; status is returned.
+                        ;
+   e0f4                 ENTRY2:
+   e0f4   cd 05 00      	CALL	ENTRY
+   e0f7   b7            	ORA	A	;set zero flag if appropriate.
+   e0f8   c9            	RET
+                        ;
+                        ;   Routine to read the next record from a sequential file.
+                        ; (DE) points to the FCB.
+                        ;
+   e0f9                 RDREC:
+   e0f9   0e 14         	MVI	C,20
+   e0fb   c3 f4 e0      	JMP	ENTRY2
+                        ;
+                        ;   Routine to read file at (FCB).
+                        ;
+   e0fe                 READFCB:
+   e0fe   11 b4 e7      	LXI	D,FCB
+   e101   c3 f9 e0      	JMP	RDREC
+                        ;
+                        ;   Routine to write the next record of a sequential file.
+                        ; (DE) points to the FCB.
+                        ;
+   e104                 WRTREC:
+   e104   0e 15         	MVI	C,21
+   e106   c3 f4 e0      	JMP	ENTRY2
+                        ;
+                        ;   Routine to create the file pointed to by (DE).
+                        ;
+   e109                 CREATE:
+   e109   0e 16         	MVI	C,22
+   e10b   c3 c3 e0      	JMP	ENTRY1
+                        ;
+                        ;   Routine to rename the file pointed to by (DE). Note that
+                        ; the new name starts at (DE+16).
+                        ;
+   e10e                 RENAM:
+   e10e   0e 17         	MVI	C,23
+   e110   c3 05 00      	JMP	ENTRY
+                        ;
+                        ;   Get the current user code.
+                        ;
+   e113                 GETUSR:
+   e113   1e ff         	MVI	E,0FFH
+                        ;
+                        ;   Routne to get or set the current user code.
+                        ; If (E) is FF then this is a GET, else it is a SET.
+                        ;
+   e115                 GETSETUC:
+   e115   0e 20         	MVI	C,32
+   e117   c3 05 00      	JMP	ENTRY
+                        ;
+                        ;   Routine to set the current drive byte at (TDRIVE).
+                        ;
+   e11a                 SETCDRV:
+   e11a   cd 13 e1      	CALL	GETUSR	;get user number
+   e11d   87            	ADD	A	;and shift into the upper 4 bits.
+   e11e   87            	ADD	A
+   e11f   87            	ADD	A
+   e120   87            	ADD	A
+   e121   21 d6 e7      	LXI	H,CDRIVE;now add in the current drive number.
+   e124   b6            	ORA	M
+   e125   32 04 00      	STA	TDRIVE	;and save.
+   e128   c9            	RET
+                        ;
+                        ;   Move currently active drive down to (TDRIVE).
+                        ;
+   e129                 MOVECD:
+   e129   3a d6 e7      	LDA	CDRIVE
+   e12c   32 04 00      	STA	TDRIVE
+   e12f   c9            	RET
+                        ;
+                        ;   Routine to convert (A) into upper case ascii. Only letters
+                        ; are affected.
+                        ;
+   e130                 UPPER:
+   e130   fe 61         	CPI	'a'	;check for letters in the range of 'a' to 'z'.
+   e132   d8            	RC
+   e133   fe 7b         	CPI	'{'
+   e135   d0            	RNC
+   e136   e6 5f         	ANI	5FH	;convert it if found.
+   e138   c9            	RET
+                        ;
+                        ;   Routine to get a line of input. We must check to see if the
+                        ; user is in (BATCH) mode. If so, then read the input from file
+                        ; ($$$.SUB). At the end, reset to console input.
+                        ;
+   e139                 GETINP:
+   e139   3a 92 e7      	LDA	BATCH	;if =0, then use console input.
+   e13c   b7            	ORA	A
+   e13d   ca 96 e1      	JZ	GETINP1
+                        ;
+                        ;   Use the submit file ($$$.sub) which is prepared by a
+                        ; SUBMIT run. It must be on drive (A) and it will be deleted
+                        ; if and error occures (like eof).
+                        ;
+   e140   3a d6 e7      	LDA	CDRIVE	;select drive 0 if need be.
+   e143   b7            	ORA	A
+   e144   3e 00         	MVI	A,0	;always use drive A for submit.
+   e146   c4 bd e0      	CNZ	DSKSEL	;select it if required.
+   e149   11 93 e7      	LXI	D,BATCHFCB
+   e14c   cd cb e0      	CALL	OPEN	;look for it.
+   e14f   ca 96 e1      	JZ	GETINP1	;if not there, use normal input.
+   e152   3a a2 e7      	LDA	BATCHFCB+15;get last record number+1.
+   e155   3d            	DCR	A
+   e156   32 b3 e7      	STA	BATCHFCB+32
+   e159   11 93 e7      	LXI	D,BATCHFCB
+   e15c   cd f9 e0      	CALL	RDREC	;read last record.
+   e15f   c2 96 e1      	JNZ	GETINP1	;quit on end of file.
+                        ;
+                        ;   Move this record into input buffer.
+                        ;
+   e162   11 07 e0      	LXI	D,INBUFF+1
+   e165   21 80 00      	LXI	H,TBUFF	;data was read into buffer here.
+   e168   06 80         	MVI	B,128	;all 128 characters may be used.
+   e16a   cd 29 e4      	CALL	HL2DE	;(HL) to (DE), (B) bytes.
+   e16d   21 a1 e7      	LXI	H,BATCHFCB+14
+   e170   36 00         	MVI	M,0	;zero out the 's2' byte.
+   e172   23            	INX	H	;and decrement the record count.
+   e173   35            	DCR	M
+   e174   11 93 e7      	LXI	D,BATCHFCB;close the batch file now.
+   e177   cd da e0      	CALL	CLOSE
+   e17a   ca 96 e1      	JZ	GETINP1	;quit on an error.
+   e17d   3a d6 e7      	LDA	CDRIVE	;re-select previous drive if need be.
+   e180   b7            	ORA	A
+   e181   c4 bd e0      	CNZ	DSKSEL	;don't do needless selects.
+                        ;
+                        ;   Print line just read on console.
+                        ;
+   e184   21 08 e0      	LXI	H,INBUFF+2
+   e187   cd ac e0      	CALL	PLINE2
+   e18a   cd c2 e1      	CALL	CHKCON	;check console, quit on a key.
+   e18d   ca a7 e1      	JZ	GETINP2	;jump if no key is pressed.
+                        ;
+                        ;   Terminate the submit job on any keyboard input. Delete this
+                        ; file such that it is not re-started and jump to normal keyboard
+                        ; input section.
+                        ;
+   e190   cd dd e1      	CALL	DELBATCH;delete the batch file.
+   e193   c3 69 e3      	JMP	CMMND1	;and restart command input.
+                        ;
+                        ;   Get here for normal keyboard input. Delete the submit file
+                        ; incase there was one.
+                        ;
+   e196                 GETINP1:
+   e196   cd dd e1      	CALL	DELBATCH;delete file ($$$.sub).
+   e199   cd 1a e1      	CALL	SETCDRV	;reset active disk.
+   e19c   0e 0a         	MVI	C,10	;get line from console device.
+   e19e   11 06 e0      	LXI	D,INBUFF
+   e1a1   cd 05 00      	CALL	ENTRY
+   e1a4   cd 29 e1      	CALL	MOVECD	;reset current drive (again).
+                        ;
+                        ;   Convert input line to upper case.
+                        ;
+   e1a7                 GETINP2:
+   e1a7   21 07 e0      	LXI	H,INBUFF+1
+   e1aa   46            	MOV	B,M	;(B)=character counter.
+   e1ab                 GETINP3:
+   e1ab   23            	INX	H
+   e1ac   78            	MOV	A,B	;end of the line?
+   e1ad   b7            	ORA	A
+   e1ae   ca ba e1      	JZ	GETINP4
+   e1b1   7e            	MOV	A,M	;convert to upper case.
+   e1b2   cd 30 e1      	CALL	UPPER
+   e1b5   77            	MOV	M,A
+   e1b6   05            	DCR	B	;adjust character count.
+   e1b7   c3 ab e1      	JMP	GETINP3
+   e1ba                 GETINP4:
+   e1ba   77            	MOV	M,A	;add trailing null.
+   e1bb   21 08 e0      	LXI	H,INBUFF+2
+   e1be   22 88 e0      	SHLD	INPOINT	;reset input line pointer.
+   e1c1   c9            	RET
+                        ;
+                        ;   Routine to check the console for a key pressed. The zero
+                        ; flag is set is none, else the character is returned in (A).
+                        ;
+   e1c2                 CHKCON:
+   e1c2   0e 0b         	MVI	C,11	;check console.
+   e1c4   cd 05 00      	CALL	ENTRY
+   e1c7   b7            	ORA	A
+   e1c8   c8            	RZ		;return if nothing.
+   e1c9   0e 01         	MVI	C,1	;else get character.
+   e1cb   cd 05 00      	CALL	ENTRY
+   e1ce   b7            	ORA	A	;clear zero flag and return.
+   e1cf   c9            	RET
+                        ;
+                        ;   Routine to get the currently active drive number.
+                        ;
+   e1d0                 GETDSK:
+   e1d0   0e 19         	MVI	C,25
+   e1d2   c3 05 00      	JMP	ENTRY
+                        ;
+                        ;   Set the stabdard dma address.
+                        ;
+   e1d5                 STDDMA:
+   e1d5   11 80 00      	LXI	D,TBUFF
+                        ;
+                        ;   Routine to set the dma address to (DE).
+                        ;
+   e1d8                 DMASET:
+   e1d8   0e 1a         	MVI	C,26
+   e1da   c3 05 00      	JMP	ENTRY
+                        ;
+                        ;  Delete the batch file created by SUBMIT.
+                        ;
+   e1dd                 DELBATCH:
+   e1dd   21 92 e7      	LXI	H,BATCH	;is batch active?
+   e1e0   7e            	MOV	A,M
+   e1e1   b7            	ORA	A
+   e1e2   c8            	RZ
+   e1e3   36 00         	MVI	M,0	;yes, de-activate it.
+   e1e5   af            	XRA	A
+   e1e6   cd bd e0      	CALL	DSKSEL	;select drive 0 for sure.
+   e1e9   11 93 e7      	LXI	D,BATCHFCB;and delete this file.
+   e1ec   cd ef e0      	CALL	DELETE
+   e1ef   3a d6 e7      	LDA	CDRIVE	;reset current drive.
+   e1f2   c3 bd e0      	JMP	DSKSEL
+                        ;
+                        ;   Check to two strings at (PATTRN1) and (PATTRN2). They must be
+                        ; the same or we halt....
+                        ;
+   e1f5                 VERIFY:
+                        ;	LXI	D,PATTRN1;these are the serial number bytes.
+                        ;	LXI	H,PATTRN2;ditto, but how could they be different?
+                        ;	MVI	B,6	;6 bytes each.
+                        ;VERIFY1:
+                        ;	LDAX	D
+                        ;	CMP	M
+                        ;	JNZ	HALT	;jump to halt routine.
+                        ;	INX	D
+                        ;	INX	H
+                        ;	DCR	B
+                        ;	JNZ	VERIFY1
+   e1f5   c9            	RET
+                        ;
+                        ;   Print back file name with a '?' to indicate a syntax error.
+                        ;
+   e1f6                 SYNERR:
+   e1f6   cd 98 e0      	CALL	CRLF	;end current line.
+   e1f9   2a 8a e0      	LHLD	NAMEPNT	;this points to name in error.
+   e1fc                 SYNERR1:
+   e1fc   7e            	MOV	A,M	;print it until a space or null is found.
+   e1fd   fe 20         	CPI	' '
+   e1ff   ca 0f e2      	JZ	SYNERR2
+   e202   b7            	ORA	A
+   e203   ca 0f e2      	JZ	SYNERR2
+   e206   e5            	PUSH	H
+   e207   cd 8c e0      	CALL	PRINT
+   e20a   e1            	POP	H
+   e20b   23            	INX	H
+   e20c   c3 fc e1      	JMP	SYNERR1
+   e20f                 SYNERR2:
+   e20f   3e 3f         	MVI	A,'?'	;add trailing '?'.
+   e211   cd 8c e0      	CALL	PRINT
+   e214   cd 98 e0      	CALL	CRLF
+   e217   cd dd e1      	CALL	DELBATCH;delete any batch file.
+   e21a   c3 69 e3      	JMP	CMMND1	;and restart from console input.
+                        ;
+                        ;   Check character at (DE) for legal command input. Note that the
+                        ; zero flag is set if the character is a delimiter.
+                        ;
+   e21d                 CHECK:
+   e21d   1a            	LDAX	D
+   e21e   b7            	ORA	A
+   e21f   c8            	RZ
+   e220   fe 20         	CPI	' '	;control characters are not legal here.
+   e222   da f6 e1      	JC	SYNERR
+   e225   c8            	RZ		;check for valid delimiter.
+   e226   fe 3d         	CPI	'='
+   e228   c8            	RZ
+   e229   fe 5f         	CPI	'_'
+   e22b   c8            	RZ
+   e22c   fe 2e         	CPI	'.'
+   e22e   c8            	RZ
+   e22f   fe 3a         	CPI	':'
+   e231   c8            	RZ
+   e232   fe 3b         	CPI	';'
+   e234   c8            	RZ
+   e235   fe 3c         	CPI	'<'
+   e237   c8            	RZ
+   e238   fe 3e         	CPI	'>'
+   e23a   c8            	RZ
+   e23b   c9            	RET
+                        ;
+                        ;   Get the next non-blank character from (DE).
+                        ;
+   e23c                 NONBLANK:
+   e23c   1a            	LDAX	D
+   e23d   b7            	ORA	A	;string ends with a null.
+   e23e   c8            	RZ
+   e23f   fe 20         	CPI	' '
+   e241   c0            	RNZ
+   e242   13            	INX	D
+   e243   c3 3c e2      	JMP	NONBLANK
+                        ;
+                        ;   Add (HL)=(HL)+(A)
+                        ;
+   e246                 ADDHL:
+   e246   85            	ADD	L
+   e247   6f            	MOV	L,A
+   e248   d0            	RNC	;take care of any carry.
+   e249   24            	INR	H
+   e24a   c9            	RET
+                        ;
+                        ;   Convert the first name in (FCB).
+                        ;
+   e24b                 CONVFST:
+   e24b   3e 00         	MVI	A,0
+                        ;
+                        ;   Format a file name (convert * to '?', etc.). On return,
+                        ; (A)=0 is an unambigeous name was specified. Enter with (A) equal to
+                        ; the position within the fcb for the name (either 0 or 16).
+                        ;
+   e24d                 CONVERT:
+   e24d   21 b4 e7      	LXI	H,FCB
+   e250   cd 46 e2      	CALL	ADDHL
+   e253   e5            	PUSH	H
+   e254   e5            	PUSH	H
+   e255   af            	XRA	A
+   e256   32 d7 e7      	STA	CHGDRV	;initialize drive change flag.
+   e259   2a 88 e0      	LHLD	INPOINT	;set (HL) as pointer into input line.
+   e25c   eb            	XCHG
+   e25d   cd 3c e2      	CALL	NONBLANK;get next non-blank character.
+   e260   eb            	XCHG
+   e261   22 8a e0      	SHLD	NAMEPNT	;save pointer here for any error message.
+   e264   eb            	XCHG
+   e265   e1            	POP	H
+   e266   1a            	LDAX	D	;get first character.
+   e267   b7            	ORA	A
+   e268   ca 76 e2      	JZ	CONVRT1
+   e26b   de 40         	SBI	'A'-1	;might be a drive name, convert to binary.
+   e26d   47            	MOV	B,A	;and save.
+   e26e   13            	INX	D	;check next character for a ':'.
+   e26f   1a            	LDAX	D
+   e270   fe 3a         	CPI	':'
+   e272   ca 7d e2      	JZ	CONVRT2
+   e275   1b            	DCX	D	;nope, move pointer back to the start of the line.
+   e276                 CONVRT1:
+   e276   3a d6 e7      	LDA	CDRIVE
+   e279   77            	MOV	M,A
+   e27a   c3 83 e2      	JMP	CONVRT3
+   e27d                 CONVRT2:
+   e27d   78            	MOV	A,B
+   e27e   32 d7 e7      	STA	CHGDRV	;set change in drives flag.
+   e281   70            	MOV	M,B
+   e282   13            	INX	D
+                        ;
+                        ;   Convert the basic file name.
+                        ;
+   e283                 CONVRT3:
+   e283   06 08         	MVI	B,08H
+   e285                 CONVRT4:
+   e285   cd 1d e2      	CALL	CHECK
+   e288   ca a6 e2      	JZ	CONVRT8
+   e28b   23            	INX	H
+   e28c   fe 2a         	CPI	'*'	;note that an '*' will fill the remaining
+   e28e   c2 96 e2      	JNZ	CONVRT5	;field with '?'.
+   e291   36 3f         	MVI	M,'?'
+   e293   c3 98 e2      	JMP	CONVRT6
+   e296                 CONVRT5:
+   e296   77            	MOV	M,A
+   e297   13            	INX	D
+   e298                 CONVRT6:
+   e298   05            	DCR	B
+   e299   c2 85 e2      	JNZ	CONVRT4
+   e29c                 CONVRT7:
+   e29c   cd 1d e2      	CALL	CHECK	;get next delimiter.
+   e29f   ca ad e2      	JZ	GETEXT
+   e2a2   13            	INX	D
+   e2a3   c3 9c e2      	JMP	CONVRT7
+   e2a6                 CONVRT8:
+   e2a6   23            	INX	H	;blank fill the file name.
+   e2a7   36 20         	MVI	M,' '
+   e2a9   05            	DCR	B
+   e2aa   c2 a6 e2      	JNZ	CONVRT8
+                        ;
+                        ;   Get the extension and convert it.
+                        ;
+   e2ad                 GETEXT:
+   e2ad   06 03         	MVI	B,03H
+   e2af   fe 2e         	CPI	'.'
+   e2b1   c2 d6 e2      	JNZ	GETEXT5
+   e2b4   13            	INX	D
+   e2b5                 GETEXT1:
+   e2b5   cd 1d e2      	CALL	CHECK
+   e2b8   ca d6 e2      	JZ	GETEXT5
+   e2bb   23            	INX	H
+   e2bc   fe 2a         	CPI	'*'
+   e2be   c2 c6 e2      	JNZ	GETEXT2
+   e2c1   36 3f         	MVI	M,'?'
+   e2c3   c3 c8 e2      	JMP	GETEXT3
+   e2c6                 GETEXT2:
+   e2c6   77            	MOV	M,A
+   e2c7   13            	INX	D
+   e2c8                 GETEXT3:
+   e2c8   05            	DCR	B
+   e2c9   c2 b5 e2      	JNZ	GETEXT1
+   e2cc                 GETEXT4:
+   e2cc   cd 1d e2      	CALL	CHECK
+   e2cf   ca dd e2      	JZ	GETEXT6
+   e2d2   13            	INX	D
+   e2d3   c3 cc e2      	JMP	GETEXT4
+   e2d6                 GETEXT5:
+   e2d6   23            	INX	H
+   e2d7   36 20         	MVI	M,' '
+   e2d9   05            	DCR	B
+   e2da   c2 d6 e2      	JNZ	GETEXT5
+   e2dd                 GETEXT6:
+   e2dd   06 03         	MVI	B,3
+   e2df                 GETEXT7:
+   e2df   23            	INX	H
+   e2e0   36 00         	MVI	M,0
+   e2e2   05            	DCR	B
+   e2e3   c2 df e2      	JNZ	GETEXT7
+   e2e6   eb            	XCHG
+   e2e7   22 88 e0      	SHLD	INPOINT	;save input line pointer.
+   e2ea   e1            	POP	H
+                        ;
+                        ;   Check to see if this is an ambigeous file name specification.
+                        ; Set the (A) register to non zero if it is.
+                        ;
+   e2eb   01 0b 00      	LXI	B,11	;set name length.
+   e2ee                 GETEXT8:
+   e2ee   23            	INX	H
+   e2ef   7e            	MOV	A,M
+   e2f0   fe 3f         	CPI	'?'	;any question marks?
+   e2f2   c2 f6 e2      	JNZ	GETEXT9
+   e2f5   04            	INR	B	;count them.
+   e2f6                 GETEXT9:
+   e2f6   0d            	DCR	C
+   e2f7   c2 ee e2      	JNZ	GETEXT8
+   e2fa   78            	MOV	A,B
+   e2fb   b7            	ORA	A
+   e2fc   c9            	RET
+                        ;
+                        ;   CP/M command table. Note commands can be either 3 or 4 characters long.
+                        ;
+   0006                 NUMCMDS	EQU	6	;number of commands
+   e2fd                 CMDTBL:
+   e2fd   44 49 52 20   	DB	'DIR '
+   e301   45 52 41 20   	DB	'ERA '
+   e305   54 59 50 45   	DB	'TYPE'
+   e309   53 41 56 45   	DB	'SAVE'
+   e30d   52 45 4e 20   	DB	'REN '
+   e311   55 53 45 52   	DB	'USER'
+                        ;
+                        ;   The following six bytes must agree with those at (PATTRN2)
+                        ; or cp/m will HALT. Why?
+                        ;
+                        ;PATTRN1:	DB	0,22,0,0,0,0;(* serial number bytes *).
+                        ;
+                        ;   Search the command table for a match with what has just
+                        ; been entered. If a match is found, then we jump to the
+                        ; proper section. Else jump to (UNKNOWN).
+                        ; On return, the (C) register is set to the command number
+                        ; that matched (or NUMCMDS+1 if no match).
+                        ;
+   e315                 SEARCH:
+   e315   21 fd e2      	LXI	H,CMDTBL
+   e318   0e 00         	MVI	C,0
+   e31a                 SEARCH1:
+   e31a   79            	MOV	A,C
+   e31b   fe 06         	CPI	NUMCMDS	;this commands exists.
+   e31d   d0            	RNC
+   e31e   11 b5 e7      	LXI	D,FCB+1	;check this one.
+   e321   06 04         	MVI	B,4	;max command length.
+   e323                 SEARCH2:
+   e323   1a            	LDAX	D
+   e324   be            	CMP	M
+   e325   c2 36 e3      	JNZ	SEARCH3	;not a match.
+   e328   13            	INX	D
+   e329   23            	INX	H
+   e32a   05            	DCR	B
+   e32b   c2 23 e3      	JNZ	SEARCH2
+   e32e   1a            	LDAX	D	;allow a 3 character command to match.
+   e32f   fe 20         	CPI	' '
+   e331   c2 3b e3      	JNZ	SEARCH4
+   e334   79            	MOV	A,C	;set return register for this command.
+   e335   c9            	RET
+   e336                 SEARCH3:
+   e336   23            	INX	H
+   e337   05            	DCR	B
+   e338   c2 36 e3      	JNZ	SEARCH3
+   e33b                 SEARCH4:
+   e33b   0c            	INR	C
+   e33c   c3 1a e3      	JMP	SEARCH1
+                        ;
+                        ;   Set the input buffer to empty and then start the command
+                        ; processor (ccp).
+                        ;
+   e33f                 CLEARBUF:
+   e33f   af            	XRA	A
+   e340   32 07 e0      	STA	INBUFF+1;second byte is actual length.
+                        ;
+                        ;**************************************************************
+                        ;*
+                        ;*
+                        ;* C C P  -   C o n s o l e   C o m m a n d   P r o c e s s o r
+                        ;*
+                        ;**************************************************************
+                        ;*
+   e343                 COMMAND:
+   e343   31 92 e7      	LXI	SP,CCPSTACK;setup stack area.
+   e346   c5            	PUSH	B	;note that (C) should be equal to:
+   e347   79            	MOV	A,C	;(uuuudddd) where 'uuuu' is the user number
+   e348   1f            	RAR		;and 'dddd' is the drive number.
+   e349   1f            	RAR
+   e34a   1f            	RAR
+   e34b   1f            	RAR
+   e34c   e6 0f         	ANI	0FH	;isolate the user number.
+   e34e   5f            	MOV	E,A
+   e34f   cd 15 e1      	CALL	GETSETUC;and set it.
+   e352   cd b8 e0      	CALL	RESDSK	;reset the disk system.
+   e355   32 92 e7      	STA	BATCH	;clear batch mode flag.
+   e358   c1            	POP	B
+   e359   79            	MOV	A,C
+   e35a   e6 0f         	ANI	0FH	;isolate the drive number.
+   e35c   32 d6 e7      	STA	CDRIVE	;and save.
+   e35f   cd bd e0      	CALL	DSKSEL	;...and select.
+   e362   3a 07 e0      	LDA	INBUFF+1
+   e365   b7            	ORA	A	;anything in input buffer already?
+   e366   c2 7f e3      	JNZ	CMMND2	;yes, we just process it.
+                        ;
+                        ;   Entry point to get a command line from the console.
+                        ;
+   e369                 CMMND1:
+   e369   31 92 e7      	LXI	SP,CCPSTACK;set stack straight.
+   e36c   cd 98 e0      	CALL	CRLF	;start a new line on the screen.
+   e36f   cd d0 e1      	CALL	GETDSK	;get current drive.
+   e372   c6 61         	ADI	'a'
+   e374   cd 8c e0      	CALL	PRINT	;print current drive.
+   e377   3e 3e         	MVI	A,'>'
+   e379   cd 8c e0      	CALL	PRINT	;and add prompt.
+   e37c   cd 39 e1      	CALL	GETINP	;get line from user.
+                        ;
+                        ;   Process command line here.
+                        ;
+   e37f                 CMMND2:
+   e37f   11 80 00      	LXI	D,TBUFF
+   e382   cd d8 e1      	CALL	DMASET	;set standard dma address.
+   e385   cd d0 e1      	CALL	GETDSK
+   e388   32 d6 e7      	STA	CDRIVE	;set current drive.
+   e38b   cd 4b e2      	CALL	CONVFST	;convert name typed in.
+   e38e   c4 f6 e1      	CNZ	SYNERR	;wild cards are not allowed.
+   e391   3a d7 e7      	LDA	CHGDRV	;if a change in drives was indicated,
+   e394   b7            	ORA	A	;then treat this as an unknown command
+   e395   c2 8c e6      	JNZ	UNKNOWN	;which gets executed.
+   e398   cd 15 e3      	CALL	SEARCH	;else search command table for a match.
+                        ;
+                        ;   Note that an unknown command returns
+                        ; with (A) pointing to the last address
+                        ; in our table which is (UNKNOWN).
+                        ;
+   e39b   21 a8 e3      	LXI	H,CMDADR;now, look thru our address table for command (A).
+   e39e   5f            	MOV	E,A	;set (DE) to command number.
+   e39f   16 00         	MVI	D,0
+   e3a1   19            	DAD	D
+   e3a2   19            	DAD	D	;(HL)=(CMDADR)+2*(command number).
+   e3a3   7e            	MOV	A,M	;now pick out this address.
+   e3a4   23            	INX	H
+   e3a5   66            	MOV	H,M
+   e3a6   6f            	MOV	L,A
+   e3a7   e9            	PCHL		;now execute it.
+                        ;
+                        ;   CP/M command address table.
+                        ;
+   e3a8                 CMDADR:
+   e3a8   5e e4 06 e5   	DW	DIRECT,ERASE,TYPE,SAVE
+   e3ac   44 e5 94 e5   
+   e3b0   f7 e5 75 e6   	DW	RENAME,USER,UNKNOWN
+   e3b4   8c e6         
+                        ;
+                        ;   Halt the system. Reason for this is unknown at present.
+                        ;
+   e3b6                 HALT:
+   e3b6   21 f3 76      	LXI	H,76F3H	;'DI HLT' instructions.
+   e3b9   22 00 e0      	SHLD	CBASE
+   e3bc   21 00 e0      	LXI	H,CBASE
+   e3bf   e9            	PCHL
+                        ;
+                        ;   Read error while TYPEing a file.
+                        ;
+   e3c0                 RDERROR:
+   e3c0   01 c6 e3      	LXI	B,RDERR
+   e3c3   c3 a7 e0      	JMP	PLINE
+   e3c6   52 65 61 64   RDERR:	DB	'Read error',0
+   e3ca   20 65 72 72   
+   e3ce   6f 72 00      
+                        ;
+                        ;   Required file was not located.
+                        ;
+   e3d1                 NONE:
+   e3d1   01 d7 e3      	LXI	B,NOFILE
+   e3d4   c3 a7 e0      	JMP	PLINE
+   e3d7   4e 6f 20 66   NOFILE:		DB	'No file',0
+   e3db   69 6c 65 00   
+                        ;
+                        ;   Decode a command of the form 'A>filename number{ filename}.
+                        ; Note that a drive specifier is not allowed on the first file
+                        ; name. On return, the number is in register (A). Any error
+                        ; causes 'filename?' to be printed and the command is aborted.
+                        ;
+   e3df                 DECODE:
+   e3df   cd 4b e2      	CALL	CONVFST	;convert filename.
+   e3e2   3a d7 e7      	LDA	CHGDRV	;do not allow a drive to be specified.
+   e3e5   b7            	ORA	A
+   e3e6   c2 f6 e1      	JNZ	SYNERR
+   e3e9   21 b5 e7      	LXI	H,FCB+1	;convert number now.
+   e3ec   01 0b 00      	LXI	B,11	;(B)=sum register, (C)=max digit count.
+   e3ef                 DECODE1:
+   e3ef   7e            	MOV	A,M
+   e3f0   fe 20         	CPI	' '	;a space terminates the numeral.
+   e3f2   ca 1a e4      	JZ	DECODE3
+   e3f5   23            	INX	H
+   e3f6   d6 30         	SUI	'0'	;make binary from ascii.
+   e3f8   fe 0a         	CPI	10	;legal digit?
+   e3fa   d2 f6 e1      	JNC	SYNERR
+   e3fd   57            	MOV	D,A	;yes, save it in (D).
+   e3fe   78            	MOV	A,B	;compute (B)=(B)*10 and check for overflow.
+   e3ff   e6 e0         	ANI	0E0H
+   e401   c2 f6 e1      	JNZ	SYNERR
+   e404   78            	MOV	A,B
+   e405   07            	RLC
+   e406   07            	RLC
+   e407   07            	RLC	;(A)=(B)*8
+   e408   80            	ADD	B	;.......*9
+   e409   da f6 e1      	JC	SYNERR
+   e40c   80            	ADD	B	;.......*10
+   e40d   da f6 e1      	JC	SYNERR
+   e410   82            	ADD	D	;add in new digit now.
+   e411                 DECODE2:
+   e411   da f6 e1      	JC	SYNERR
+   e414   47            	MOV	B,A	;and save result.
+   e415   0d            	DCR	C	;only look at 11 digits.
+   e416   c2 ef e3      	JNZ	DECODE1
+   e419   c9            	RET
+   e41a                 DECODE3:
+   e41a   7e            	MOV	A,M	;spaces must follow (why?).
+   e41b   fe 20         	CPI	' '
+   e41d   c2 f6 e1      	JNZ	SYNERR
+   e420   23            	INX	H
+   e421                 DECODE4:
+   e421   0d            	DCR	C
+   e422   c2 1a e4      	JNZ	DECODE3
+   e425   78            	MOV	A,B	;set (A)=the numeric value entered.
+   e426   c9            	RET
+                        ;
+                        ;   Move 3 bytes from (HL) to (DE). Note that there is only
+                        ; one reference to this at (A2D5h).
+                        ;
+   e427                 MOVE3:
+   e427   06 03         	MVI	B,3
+                        ;
+                        ;   Move (B) bytes from (HL) to (DE).
+                        ;
+   e429                 HL2DE:
+   e429   7e            	MOV	A,M
+   e42a   12            	STAX	D
+   e42b   23            	INX	H
+   e42c   13            	INX	D
+   e42d   05            	DCR	B
+   e42e   c2 29 e4      	JNZ	HL2DE
+   e431   c9            	RET
+                        ;
+                        ;   Compute (HL)=(TBUFF)+(A)+(C) and get the byte that's here.
+                        ;
+   e432                 EXTRACT:
+   e432   21 80 00      	LXI	H,TBUFF
+   e435   81            	ADD	C
+   e436   cd 46 e2      	CALL	ADDHL
+   e439   7e            	MOV	A,M
+   e43a   c9            	RET
+                        ;
+                        ;  Check drive specified. If it means a change, then the new
+                        ; drive will be selected. In any case, the drive byte of the
+                        ; fcb will be set to null (means use current drive).
+                        ;
+   e43b                 DSELECT:
+   e43b   af            	XRA	A	;null out first byte of fcb.
+   e43c   32 b4 e7      	STA	FCB
+   e43f   3a d7 e7      	LDA	CHGDRV	;a drive change indicated?
+   e442   b7            	ORA	A
+   e443   c8            	RZ
+   e444   3d            	DCR	A	;yes, is it the same as the current drive?
+   e445   21 d6 e7      	LXI	H,CDRIVE
+   e448   be            	CMP	M
+   e449   c8            	RZ
+   e44a   c3 bd e0      	JMP	DSKSEL	;no. Select it then.
+                        ;
+                        ;   Check the drive selection and reset it to the previous
+                        ; drive if it was changed for the preceeding command.
+                        ;
+   e44d                 RESETDR:
+   e44d   3a d7 e7      	LDA	CHGDRV	;drive change indicated?
+   e450   b7            	ORA	A
+   e451   c8            	RZ
+   e452   3d            	DCR	A	;yes, was it a different drive?
+   e453   21 d6 e7      	LXI	H,CDRIVE
+   e456   be            	CMP	M
+   e457   c8            	RZ
+   e458   3a d6 e7      	LDA	CDRIVE	;yes, re-select our old drive.
+   e45b   c3 bd e0      	JMP	DSKSEL
+                        ;
+                        ;**************************************************************
+                        ;*
+                        ;*           D I R E C T O R Y   C O M M A N D
+                        ;*
+                        ;**************************************************************
+                        ;
+   e45e                 DIRECT:
+   e45e   cd 4b e2      	CALL	CONVFST	;convert file name.
+   e461   cd 3b e4      	CALL	DSELECT	;select indicated drive.
+   e464   21 b5 e7      	LXI	H,FCB+1	;was any file indicated?
+   e467   7e            	MOV	A,M
+   e468   fe 20         	CPI	' '
+   e46a   c2 76 e4      	JNZ	DIRECT2
+   e46d   06 0b         	MVI	B,11	;no. Fill field with '?' - same as *.*.
+   e46f                 DIRECT1:
+   e46f   36 3f         	MVI	M,'?'
+   e471   23            	INX	H
+   e472   05            	DCR	B
+   e473   c2 6f e4      	JNZ	DIRECT1
+   e476                 DIRECT2:
+   e476   1e 00         	MVI	E,0	;set initial cursor position.
+   e478   d5            	PUSH	D
+   e479   cd e9 e0      	CALL	SRCHFCB	;get first file name.
+   e47c   cc d1 e3      	CZ	NONE	;none found at all?
+   e47f                 DIRECT3:
+   e47f   ca 02 e5      	JZ	DIRECT9	;terminate if no more names.
+   e482   3a d5 e7      	LDA	RTNCODE	;get file's position in segment (0-3).
+   e485   0f            	RRC
+   e486   0f            	RRC
+   e487   0f            	RRC
+   e488   e6 60         	ANI	60H	;(A)=position*32
+   e48a   4f            	MOV	C,A
+   e48b   3e 0a         	MVI	A,10
+   e48d   cd 32 e4      	CALL	EXTRACT	;extract the tenth entry in fcb.
+   e490   17            	RAL		;check system file status bit.
+   e491   da f6 e4      	JC	DIRECT8	;we don't list them.
+   e494   d1            	POP	D
+   e495   7b            	MOV	A,E	;bump name count.
+   e496   1c            	INR	E
+   e497   d5            	PUSH	D
+   e498   e6 03         	ANI	03H	;at end of line?
+   e49a   f5            	PUSH	PSW
+   e49b   c2 b3 e4      	JNZ	DIRECT4
+   e49e   cd 98 e0      	CALL	CRLF	;yes, end this line and start another.
+   e4a1   c5            	PUSH	B
+   e4a2   cd d0 e1      	CALL	GETDSK	;start line with ('A:').
+   e4a5   c1            	POP	B
+   e4a6   c6 41         	ADI	'A'
+   e4a8   cd 92 e0      	CALL	PRINTB
+   e4ab   3e 3a         	MVI	A,':'
+   e4ad   cd 92 e0      	CALL	PRINTB
+   e4b0   c3 bb e4      	JMP	DIRECT5
+   e4b3                 DIRECT4:
+   e4b3   cd a2 e0      	CALL	SPACE	;add seperator between file names.
+   e4b6   3e 3a         	MVI	A,':'
+   e4b8   cd 92 e0      	CALL	PRINTB
+   e4bb                 DIRECT5:
+   e4bb   cd a2 e0      	CALL	SPACE
+   e4be   06 01         	MVI	B,1	;'extract' each file name character at a time.
+   e4c0                 DIRECT6:
+   e4c0   78            	MOV	A,B
+   e4c1   cd 32 e4      	CALL	EXTRACT
+   e4c4   e6 7f         	ANI	7FH	;strip bit 7 (status bit).
+   e4c6   fe 20         	CPI	' '	;are we at the end of the name?
+   e4c8   c2 e0 e4      	JNZ	DRECT65
+   e4cb   f1            	POP	PSW	;yes, don't print spaces at the end of a line.
+   e4cc   f5            	PUSH	PSW
+   e4cd   fe 03         	CPI	3
+   e4cf   c2 de e4      	JNZ	DRECT63
+   e4d2   3e 09         	MVI	A,9	;first check for no extension.
+   e4d4   cd 32 e4      	CALL	EXTRACT
+   e4d7   e6 7f         	ANI	7FH
+   e4d9   fe 20         	CPI	' '
+   e4db   ca f5 e4      	JZ	DIRECT7	;don't print spaces.
+   e4de                 DRECT63:
+   e4de   3e 20         	MVI	A,' '	;else print them.
+   e4e0                 DRECT65:
+   e4e0   cd 92 e0      	CALL	PRINTB
+   e4e3   04            	INR	B	;bump to next character psoition.
+   e4e4   78            	MOV	A,B
+   e4e5   fe 0c         	CPI	12	;end of the name?
+   e4e7   d2 f5 e4      	JNC	DIRECT7
+   e4ea   fe 09         	CPI	9	;nope, starting extension?
+   e4ec   c2 c0 e4      	JNZ	DIRECT6
+   e4ef   cd a2 e0      	CALL	SPACE	;yes, add seperating space.
+   e4f2   c3 c0 e4      	JMP	DIRECT6
+   e4f5                 DIRECT7:
+   e4f5   f1            	POP	PSW	;get the next file name.
+   e4f6                 DIRECT8:
+   e4f6   cd c2 e1      	CALL	CHKCON	;first check console, quit on anything.
+   e4f9   c2 02 e5      	JNZ	DIRECT9
+   e4fc   cd e4 e0      	CALL	SRCHNXT	;get next name.
+   e4ff   c3 7f e4      	JMP	DIRECT3	;and continue with our list.
+   e502                 DIRECT9:
+   e502   d1            	POP	D	;restore the stack and return to command level.
+   e503   c3 6d e7      	JMP	GETBACK
+                        ;
+                        ;**************************************************************
+                        ;*
+                        ;*                E R A S E   C O M M A N D
+                        ;*
+                        ;**************************************************************
+                        ;
+   e506                 ERASE:
+   e506   cd 4b e2      	CALL	CONVFST	;convert file name.
+   e509   fe 0b         	CPI	11	;was '*.*' entered?
+   e50b   c2 29 e5      	JNZ	ERASE1
+   e50e   01 39 e5      	LXI	B,YESNO	;yes, ask for confirmation.
+   e511   cd a7 e0      	CALL	PLINE
+   e514   cd 39 e1      	CALL	GETINP
+   e517   21 07 e0      	LXI	H,INBUFF+1
+   e51a   35            	DCR	M	;must be exactly 'y'.
+   e51b   c2 69 e3      	JNZ	CMMND1
+   e51e   23            	INX	H
+   e51f   7e            	MOV	A,M
+   e520   fe 59         	CPI	'Y'
+   e522   c2 69 e3      	JNZ	CMMND1
+   e525   23            	INX	H
+   e526   22 88 e0      	SHLD	INPOINT	;save input line pointer.
+   e529                 ERASE1:
+   e529   cd 3b e4      	CALL	DSELECT	;select desired disk.
+   e52c   11 b4 e7      	LXI	D,FCB
+   e52f   cd ef e0      	CALL	DELETE	;delete the file.
+   e532   3c            	INR	A
+   e533   cc d1 e3      	CZ	NONE	;not there?
+   e536   c3 6d e7      	JMP	GETBACK	;return to command level now.
+   e539                 YESNO:
+   e539   41 6c 6c 20   	DB	'All (y/n)?',0
+   e53d   28 79 2f 6e   
+   e541   29 3f 00      
+                        ;
+                        ;**************************************************************
+                        ;*
+                        ;*            T Y P E   C O M M A N D
+                        ;*
+                        ;**************************************************************
+                        ;
+   e544                 TYPE:
+   e544   cd 4b e2      	CALL	CONVFST	;convert file name.
+   e547   c2 f6 e1      	JNZ	SYNERR	;wild cards not allowed.
+   e54a   cd 3b e4      	CALL	DSELECT	;select indicated drive.
+   e54d   cd d0 e0      	CALL	OPENFCB	;open the file.
+   e550   ca 8e e5      	JZ	TYPE5	;not there?
+   e553   cd 98 e0      	CALL	CRLF	;ok, start a new line on the screen.
+   e556   21 d8 e7      	LXI	H,NBYTES;initialize byte counter.
+   e559   36 ff         	MVI	M,0FFH	;set to read first sector.
+   e55b                 TYPE1:
+   e55b   21 d8 e7      	LXI	H,NBYTES
+   e55e                 TYPE2:
+   e55e   7e            	MOV	A,M	;have we written the entire sector?
+   e55f   fe 80         	CPI	128
+   e561   da 6e e5      	JC	TYPE3
+   e564   e5            	PUSH	H	;yes, read in the next one.
+   e565   cd fe e0      	CALL	READFCB
+   e568   e1            	POP	H
+   e569   c2 87 e5      	JNZ	TYPE4	;end or error?
+   e56c   af            	XRA	A	;ok, clear byte counter.
+   e56d   77            	MOV	M,A
+   e56e                 TYPE3:
+   e56e   34            	INR	M	;count this byte.
+   e56f   21 80 00      	LXI	H,TBUFF	;and get the (A)th one from the buffer (TBUFF).
+   e572   cd 46 e2      	CALL	ADDHL
+   e575   7e            	MOV	A,M
+   e576   fe 1a         	CPI	CNTRLZ	;end of file mark?
+   e578   ca 6d e7      	JZ	GETBACK
+   e57b   cd 8c e0      	CALL	PRINT	;no, print it.
+   e57e   cd c2 e1      	CALL	CHKCON	;check console, quit if anything ready.
+   e581   c2 6d e7      	JNZ	GETBACK
+   e584   c3 5b e5      	JMP	TYPE1
+                        ;
+                        ;   Get here on an end of file or read error.
+                        ;
+   e587                 TYPE4:
+   e587   3d            	DCR	A	;read error?
+   e588   ca 6d e7      	JZ	GETBACK
+   e58b   cd c0 e3      	CALL	RDERROR	;yes, print message.
+   e58e                 TYPE5:
+   e58e   cd 4d e4      	CALL	RESETDR	;and reset proper drive
+   e591   c3 f6 e1      	JMP	SYNERR	;now print file name with problem.
+                        ;
+                        ;**************************************************************
+                        ;*
+                        ;*            S A V E   C O M M A N D
+                        ;*
+                        ;**************************************************************
+                        ;
+   e594                 SAVE:
+   e594   cd df e3      	CALL	DECODE	;get numeric number that follows SAVE.
+   e597   f5            	PUSH	PSW	;save number of pages to write.
+   e598   cd 4b e2      	CALL	CONVFST	;convert file name.
+   e59b   c2 f6 e1      	JNZ	SYNERR	;wild cards not allowed.
+   e59e   cd 3b e4      	CALL	DSELECT	;select specified drive.
+   e5a1   11 b4 e7      	LXI	D,FCB	;now delete this file.
+   e5a4   d5            	PUSH	D
+   e5a5   cd ef e0      	CALL	DELETE
+   e5a8   d1            	POP	D
+   e5a9   cd 09 e1      	CALL	CREATE	;and create it again.
+   e5ac   ca e2 e5      	JZ	SAVE3	;can't create?
+   e5af   af            	XRA	A	;clear record number byte.
+   e5b0   32 d4 e7      	STA	FCB+32
+   e5b3   f1            	POP	PSW	;convert pages to sectors.
+   e5b4   6f            	MOV	L,A
+   e5b5   26 00         	MVI	H,0
+   e5b7   29            	DAD	H	;(HL)=number of sectors to write.
+   e5b8   11 00 01      	LXI	D,TBASE	;and we start from here.
+   e5bb                 SAVE1:
+   e5bb   7c            	MOV	A,H	;done yet?
+   e5bc   b5            	ORA	L
+   e5bd   ca d8 e5      	JZ	SAVE2
+   e5c0   2b            	DCX	H	;nope, count this and compute the start
+   e5c1   e5            	PUSH	H	;of the next 128 byte sector.
+   e5c2   21 80 00      	LXI	H,128
+   e5c5   19            	DAD	D
+   e5c6   e5            	PUSH	H	;save it and set the transfer address.
+   e5c7   cd d8 e1      	CALL	DMASET
+   e5ca   11 b4 e7      	LXI	D,FCB	;write out this sector now.
+   e5cd   cd 04 e1      	CALL	WRTREC
+   e5d0   d1            	POP	D	;reset (DE) to the start of the last sector.
+   e5d1   e1            	POP	H	;restore sector count.
+   e5d2   c2 e2 e5      	JNZ	SAVE3	;write error?
+   e5d5   c3 bb e5      	JMP	SAVE1
+                        ;
+                        ;   Get here after writing all of the file.
+                        ;
+   e5d8                 SAVE2:
+   e5d8   11 b4 e7      	LXI	D,FCB	;now close the file.
+   e5db   cd da e0      	CALL	CLOSE
+   e5de   3c            	INR	A	;did it close ok?
+   e5df   c2 e8 e5      	JNZ	SAVE4
+                        ;
+                        ;   Print out error message (no space).
+                        ;
+   e5e2                 SAVE3:
+   e5e2   01 ee e5      	LXI	B,NOSPACE
+   e5e5   cd a7 e0      	CALL	PLINE
+   e5e8                 SAVE4:
+   e5e8   cd d5 e1      	CALL	STDDMA	;reset the standard dma address.
+   e5eb   c3 6d e7      	JMP	GETBACK
+   e5ee   4e 6f 20 73   NOSPACE:	DB	'No space',0
+   e5f2   70 61 63 65   
+   e5f6   00            
+                        ;
+                        ;**************************************************************
+                        ;*
+                        ;*           R E N A M E   C O M M A N D
+                        ;*
+                        ;**************************************************************
+                        ;
+   e5f7                 RENAME:
+   e5f7   cd 4b e2      	CALL	CONVFST	;convert first file name.
+   e5fa   c2 f6 e1      	JNZ	SYNERR	;wild cards not allowed.
+   e5fd   3a d7 e7      	LDA	CHGDRV	;remember any change in drives specified.
+   e600   f5            	PUSH	PSW
+   e601   cd 3b e4      	CALL	DSELECT	;and select this drive.
+   e604   cd e9 e0      	CALL	SRCHFCB	;is this file present?
+   e607   c2 60 e6      	JNZ	RENAME6	;yes, print error message.
+   e60a   21 b4 e7      	LXI	H,FCB	;yes, move this name into second slot.
+   e60d   11 c4 e7      	LXI	D,FCB+16
+   e610   06 10         	MVI	B,16
+   e612   cd 29 e4      	CALL	HL2DE
+   e615   2a 88 e0      	LHLD	INPOINT	;get input pointer.
+   e618   eb            	XCHG
+   e619   cd 3c e2      	CALL	NONBLANK;get next non blank character.
+   e61c   fe 3d         	CPI	'='	;only allow an '=' or '_' seperator.
+   e61e   ca 26 e6      	JZ	RENAME1
+   e621   fe 5f         	CPI	'_'
+   e623   c2 5a e6      	JNZ	RENAME5
+   e626                 RENAME1:
+   e626   eb            	XCHG
+   e627   23            	INX	H	;ok, skip seperator.
+   e628   22 88 e0      	SHLD	INPOINT	;save input line pointer.
+   e62b   cd 4b e2      	CALL	CONVFST	;convert this second file name now.
+   e62e   c2 5a e6      	JNZ	RENAME5	;again, no wild cards.
+   e631   f1            	POP	PSW	;if a drive was specified, then it
+   e632   47            	MOV	B,A	;must be the same as before.
+   e633   21 d7 e7      	LXI	H,CHGDRV
+   e636   7e            	MOV	A,M
+   e637   b7            	ORA	A
+   e638   ca 40 e6      	JZ	RENAME2
+   e63b   b8            	CMP	B
+   e63c   70            	MOV	M,B
+   e63d   c2 5a e6      	JNZ	RENAME5	;they were different, error.
+   e640                 RENAME2:
+   e640   70            	MOV	M,B;	reset as per the first file specification.
+   e641   af            	XRA	A
+   e642   32 b4 e7      	STA	FCB	;clear the drive byte of the fcb.
+   e645                 RENAME3:
+   e645   cd e9 e0      	CALL	SRCHFCB	;and go look for second file.
+   e648   ca 54 e6      	JZ	RENAME4	;doesn't exist?
+   e64b   11 b4 e7      	LXI	D,FCB
+   e64e   cd 0e e1      	CALL	RENAM	;ok, rename the file.
+   e651   c3 6d e7      	JMP	GETBACK
+                        ;
+                        ;   Process rename errors here.
+                        ;
+   e654                 RENAME4:
+   e654   cd d1 e3      	CALL	NONE	;file not there.
+   e657   c3 6d e7      	JMP	GETBACK
+   e65a                 RENAME5:
+   e65a   cd 4d e4      	CALL	RESETDR	;bad command format.
+   e65d   c3 f6 e1      	JMP	SYNERR
+   e660                 RENAME6:
+   e660   01 69 e6      	LXI	B,EXISTS;destination file already exists.
+   e663   cd a7 e0      	CALL	PLINE
+   e666   c3 6d e7      	JMP	GETBACK
+   e669                 EXISTS:
+   e669   46 69 6c 65   	DB	'File exists',0
+   e66d   20 65 78 69   
+   e671   73 74 73 00   
+                        ;
+                        ;**************************************************************
+                        ;*
+                        ;*             U S E R   C O M M A N D
+                        ;*
+                        ;**************************************************************
+                        ;
+   e675                 USER:
+   e675   cd df e3      	CALL	DECODE	;get numeric value following command.
+   e678   fe 10         	CPI	16	;legal user number?
+   e67a   d2 f6 e1      	JNC	SYNERR
+   e67d   5f            	MOV	E,A	;yes but is there anything else?
+   e67e   3a b5 e7      	LDA	FCB+1
+   e681   fe 20         	CPI	' '
+   e683   ca f6 e1      	JZ	SYNERR	;yes, that is not allowed.
+   e686   cd 15 e1      	CALL	GETSETUC;ok, set user code.
+   e689   c3 70 e7      	JMP	GETBACK1
+                        ;
+                        ;**************************************************************
+                        ;*
+                        ;*        T R A N S I A N T   P R O G R A M   C O M M A N D
+                        ;*
+                        ;**************************************************************
+                        ;
+   e68c                 UNKNOWN:
+   e68c   cd f5 e1      	CALL	VERIFY	;check for valid system (why?).
+   e68f   3a b5 e7      	LDA	FCB+1	;anything to execute?
+   e692   fe 20         	CPI	' '
+   e694   c2 ab e6      	JNZ	UNKWN1
+   e697   3a d7 e7      	LDA	CHGDRV	;nope, only a drive change?
+   e69a   b7            	ORA	A
+   e69b   ca 70 e7      	JZ	GETBACK1;neither???
+   e69e   3d            	DCR	A
+   e69f   32 d6 e7      	STA	CDRIVE	;ok, store new drive.
+   e6a2   cd 29 e1      	CALL	MOVECD	;set (TDRIVE) also.
+   e6a5   cd bd e0      	CALL	DSKSEL	;and select this drive.
+   e6a8   c3 70 e7      	JMP	GETBACK1;then return.
+                        ;
+                        ;   Here a file name was typed. Prepare to execute it.
+                        ;
+   e6ab                 UNKWN1:
+   e6ab   11 bd e7      	LXI	D,FCB+9	;an extension specified?
+   e6ae   1a            	LDAX	D
+   e6af   fe 20         	CPI	' '
+   e6b1   c2 f6 e1      	JNZ	SYNERR	;yes, not allowed.
+   e6b4                 UNKWN2:
+   e6b4   d5            	PUSH	D
+   e6b5   cd 3b e4      	CALL	DSELECT	;select specified drive.
+   e6b8   d1            	POP	D
+   e6b9   21 6a e7      	LXI	H,COMFILE	;set the extension to 'COM'.
+   e6bc   cd 27 e4      	CALL	MOVE3
+   e6bf   cd d0 e0      	CALL	OPENFCB	;and open this file.
+   e6c2   ca 52 e7      	JZ	UNKWN9	;not present?
+                        ;
+                        ;   Load in the program.
+                        ;
+   e6c5   21 00 01      	LXI	H,TBASE	;store the program starting here.
+   e6c8                 UNKWN3:
+   e6c8   e5            	PUSH	H
+   e6c9   eb            	XCHG
+   e6ca   cd d8 e1      	CALL	DMASET	;set transfer address.
+   e6cd   11 b4 e7      	LXI	D,FCB	;and read the next record.
+   e6d0   cd f9 e0      	CALL	RDREC
+   e6d3   c2 e8 e6      	JNZ	UNKWN4	;end of file or read error?
+   e6d6   e1            	POP	H	;nope, bump pointer for next sector.
+   e6d7   11 80 00      	LXI	D,128
+   e6da   19            	DAD	D
+   e6db   11 00 e0      	LXI	D,CBASE	;enough room for the whole file?
+   e6de   7d            	MOV	A,L
+   e6df   93            	SUB	E
+   e6e0   7c            	MOV	A,H
+   e6e1   9a            	SBB	D
+   e6e2   d2 58 e7      	JNC	UNKWN0	;no, it can't fit.
+   e6e5   c3 c8 e6      	JMP	UNKWN3
+                        ;
+                        ;   Get here after finished reading.
+                        ;
+   e6e8                 UNKWN4:
+   e6e8   e1            	POP	H
+   e6e9   3d            	DCR	A	;normal end of file?
+   e6ea   c2 58 e7      	JNZ	UNKWN0
+   e6ed   cd 4d e4      	CALL	RESETDR	;yes, reset previous drive.
+   e6f0   cd 4b e2      	CALL	CONVFST	;convert the first file name that follows
+   e6f3   21 d7 e7      	LXI	H,CHGDRV;command name.
+   e6f6   e5            	PUSH	H
+   e6f7   7e            	MOV	A,M	;set drive code in default fcb.
+   e6f8   32 b4 e7      	STA	FCB
+   e6fb   3e 10         	MVI	A,16	;put second name 16 bytes later.
+   e6fd   cd 4d e2      	CALL	CONVERT	;convert second file name.
+   e700   e1            	POP	H
+   e701   7e            	MOV	A,M	;and set the drive for this second file.
+   e702   32 c4 e7      	STA	FCB+16
+   e705   af            	XRA	A	;clear record byte in fcb.
+   e706   32 d4 e7      	STA	FCB+32
+   e709   11 5c 00      	LXI	D,TFCB	;move it into place at(005Ch).
+   e70c   21 b4 e7      	LXI	H,FCB
+   e70f   06 21         	MVI	B,33
+   e711   cd 29 e4      	CALL	HL2DE
+   e714   21 08 e0      	LXI	H,INBUFF+2;now move the remainder of the input
+   e717                 UNKWN5:
+   e717   7e            	MOV	A,M	;line down to (0080h). Look for a non blank.
+   e718   b7            	ORA	A	;or a null.
+   e719   ca 25 e7      	JZ	UNKWN6
+   e71c   fe 20         	CPI	' '
+   e71e   ca 25 e7      	JZ	UNKWN6
+   e721   23            	INX	H
+   e722   c3 17 e7      	JMP	UNKWN5
+                        ;
+                        ;   Do the line move now. It ends in a null byte.
+                        ;
+   e725                 UNKWN6:
+   e725   06 00         	MVI	B,0	;keep a character count.
+   e727   11 81 00      	LXI	D,TBUFF+1;data gets put here.
+   e72a                 UNKWN7:
+   e72a   7e            	MOV	A,M	;move it now.
+   e72b   12            	STAX	D
+   e72c   b7            	ORA	A
+   e72d   ca 36 e7      	JZ	UNKWN8
+   e730   04            	INR	B
+   e731   23            	INX	H
+   e732   13            	INX	D
+   e733   c3 2a e7      	JMP	UNKWN7
+   e736                 UNKWN8:
+   e736   78            	MOV	A,B	;now store the character count.
+   e737   32 80 00      	STA	TBUFF
+   e73a   cd 98 e0      	CALL	CRLF	;clean up the screen.
+   e73d   cd d5 e1      	CALL	STDDMA	;set standard transfer address.
+   e740   cd 1a e1      	CALL	SETCDRV	;reset current drive.
+   e743   cd 00 01      	CALL	TBASE	;and execute the program.
+                        ;
+                        ;   Transiant programs return here (or reboot).
+                        ;
+   e746   31 92 e7      	LXI	SP,BATCH	;set stack first off.
+   e749   cd 29 e1      	CALL	MOVECD	;move current drive into place (TDRIVE).
+   e74c   cd bd e0      	CALL	DSKSEL	;and reselect it.
+   e74f   c3 69 e3      	JMP	CMMND1	;back to comand mode.
+                        ;
+                        ;   Get here if some error occured.
+                        ;
+   e752                 UNKWN9:
+   e752   cd 4d e4      	CALL	RESETDR	;inproper format.
+   e755   c3 f6 e1      	JMP	SYNERR
+   e758                 UNKWN0:
+   e758   01 61 e7      	LXI	B,BADLOAD;read error or won't fit.
+   e75b   cd a7 e0      	CALL	PLINE
+   e75e   c3 6d e7      	JMP	GETBACK
+   e761                 BADLOAD:
+   e761   42 61 64 20   	DB	'Bad load',0
+   e765   6c 6f 61 64   
+   e769   00            
+   e76a                 COMFILE:
+   e76a   43 4f 4d      	DB	'COM'	;command file extension.
+                        ;
+                        ;   Get here to return to command level. We will reset the
+                        ; previous active drive and then either return to command
+                        ; level directly or print error message and then return.
+                        ;
+   e76d                 GETBACK:
+   e76d   cd 4d e4      	CALL	RESETDR	;reset previous drive.
+   e770                 GETBACK1:
+   e770   cd 4b e2      	CALL	CONVFST	;convert first name in (FCB).
+   e773   3a b5 e7      	LDA	FCB+1	;if this was just a drive change request,
+   e776   d6 20         	SUI	' '	;make sure it was valid.
+   e778   21 d7 e7      	LXI	H,CHGDRV
+   e77b   b6            	ORA	M
+   e77c   c2 f6 e1      	JNZ	SYNERR
+   e77f   c3 69 e3      	JMP	CMMND1	;ok, return to command level.
+                        ;
+                        ;   ccp stack area.
+                        ;
+   e782   00 00 00 00   	DB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+   e786   00 00 00 00   
+   e78a   00 00 00 00   
+   e78e   00 00 00 00   
+   e792                 CCPSTACK EQU	$	;end of ccp stack area.
+                        ;
+                        ;   Batch (or SUBMIT) processing information storage.
+                        ;
+   e792   00            BATCH:		DB	0	;batch mode flag (0=not active).
+   e793   00 24 24 24   BATCHFCB:	DB	0,'$$$     SUB',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+   e797   20 20 20 20   
+   e79b   20 53 55 42   
+   e79f   00 00 00 00   
+   e7a3   00 00 00 00   
+   e7a7   00 00 00 00   
+   e7ab   00 00 00 00   
+   e7af   00 00 00 00   
+   e7b3   00            
+                        
+                        ;   File control block setup by the CCP.
+   e7b4   00 20 20 20   FCB:		DB	0,'           ',0,0,0,0,0,'           ',0,0,0,0,0
+   e7b8   20 20 20 20   
+   e7bc   20 20 20 20   
+   e7c0   00 00 00 00   
+   e7c4   00 20 20 20   
+   e7c8   20 20 20 20   
+   e7cc   20 20 20 20   
+   e7d0   00 00 00 00   
+   e7d4   00            
+   e7d5   00            RTNCODE:	DB	0	;status returned from bdos call.
+   e7d6   00            CDRIVE:	DB	0	;currently active drive.
+   e7d7   00            CHGDRV:	DB	0	;change in drives flag (0=no change).
+   e7d8   00 00         NBYTES:	DW	0	;byte counter used by TYPE.
+                        
+                        ;   Room for expansion?
+                        ;		DB	0,0,0,0,0,0,0,0,0,0,0,0,0
+                        ;   Note that the following six bytes must match those at
+                        ; (PATTRN1) or cp/m will HALT. Why?
+                        ;PATTRN2:	DB	0,22,0,0,0,0  ;(* serial number bytes *).
+                        
+   e7da                 	end
+e246  ADDHL         e761  BADLOAD       e792  BATCH         e793  BATCHFCB  
+e800  BDOS          0008  BS            e000  CBASE         e000  CCP       
+e792  CCPSTACK      e7d6  CDRIVE        e21d  CHECK         e7d7  CHGDRV    
+e1c2  CHKCON        e33f  CLEARBUF      e0da  CLOSE         e3a8  CMDADR    
+e2fd  CMDTBL        e369  CMMND1        e37f  CMMND2        0003  CNTRLC    
+0005  CNTRLE        0010  CNTRLP        0012  CNTRLR        0013  CNTRLS    
+0015  CNTRLU        0018  CNTRLX        001a  CNTRLZ        e76a  COMFILE   
+e343  COMMAND       e24d  CONVERT       e24b  CONVFST       e276  CONVRT1   
+e27d  CONVRT2       e283  CONVRT3       e285  CONVRT4       e296  CONVRT5   
+e298  CONVRT6       e29c  CONVRT7       e2a6  CONVRT8       000d  CR        
+e109  CREATE        e098  CRLF          e3df  DECODE        e3ef  DECODE1   
+e411  DECODE2       e41a  DECODE3       e421  DECODE4       007f  DEL       
+e1dd  DELBATCH      e0ef  DELETE        e45e  DIRECT        e46f  DIRECT1   
+e476  DIRECT2       e47f  DIRECT3       e4b3  DIRECT4       e4bb  DIRECT5   
+e4c0  DIRECT6       e4f5  DIRECT7       e4f6  DIRECT8       e502  DIRECT9   
+e1d8  DMASET        e4de  DRECT63       e4e0  DRECT65       e43b  DSELECT   
+e0bd  DSKSEL        0005  ENTRY         e0c3  ENTRY1        e0f4  ENTRY2    
+e506  ERASE         e529  ERASE1        001b  ESCAPE        e669  EXISTS    
+e432  EXTRACT       e7b4  FCB           000c  FF            e76d  GETBACK   
+e770  GETBACK1      e1d0  GETDSK        e2ad  GETEXT        e2b5  GETEXT1   
+e2c6  GETEXT2       e2c8  GETEXT3       e2cc  GETEXT4       e2d6  GETEXT5   
+e2dd  GETEXT6       e2df  GETEXT7       e2ee  GETEXT8       e2f6  GETEXT9   
+e139  GETINP        e196  GETINP1       e1a7  GETINP2       e1ab  GETINP3   
+e1ba  GETINP4       e115  GETSETUC      e113  GETUSR        e3b6  HALT      
+e429  HL2DE         e006  INBUFF        e088  INPOINT       0003  IOBYTE    
+000a  LF            e427  MOVE3         e129  MOVECD        e08a  NAMEPNT   
+e7d8  NBYTES        e3d7  NOFILE        e23c  NONBLANK      e3d1  NONE      
+e5ee  NOSPACE       0006  NUMCMDS       e0cb  OPEN          e0d0  OPENFCB   
+e0a7  PLINE         e0ac  PLINE2        e08c  PRINT         e092  PRINTB    
+e3c6  RDERR         e3c0  RDERROR       e0f9  RDREC         e0fe  READFCB   
+e10e  RENAM         e5f7  RENAME        e626  RENAME1       e640  RENAME2   
+e645  RENAME3       e654  RENAME4       e65a  RENAME5       e660  RENAME6   
+e0b8  RESDSK        e44d  RESETDR       e7d5  RTNCODE       e594  SAVE      
+e5bb  SAVE1         e5d8  SAVE2         e5e2  SAVE3         e5e8  SAVE4     
+e315  SEARCH        e31a  SEARCH1       e323  SEARCH2       e336  SEARCH3   
+e33b  SEARCH4       e11a  SETCDRV       e0a2  SPACE         e0e9  SRCHFCB   
+e0df  SRCHFST       e0e4  SRCHNXT       e1d5  STDDMA        e1f6  SYNERR    
+e1fc  SYNERR1       e20f  SYNERR2       0009  TAB           0100  TBASE     
+0080  TBUFF         0004  TDRIVE        005c  TFCB          e544  TYPE      
+e55b  TYPE1         e55e  TYPE2         e56e  TYPE3         e587  TYPE4     
+e58e  TYPE5         e68c  UNKNOWN       e758  UNKWN0        e6ab  UNKWN1    
+e6b4  UNKWN2        e6c8  UNKWN3        e6e8  UNKWN4        e717  UNKWN5    
+e725  UNKWN6        e72a  UNKWN7        e736  UNKWN8        e752  UNKWN9    
+e130  UPPER         e675  USER          e1f5  VERIFY        e104  WRTREC    
+e539  YESNO         
+

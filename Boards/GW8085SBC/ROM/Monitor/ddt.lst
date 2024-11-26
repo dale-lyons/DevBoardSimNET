@@ -1,0 +1,64 @@
+0001   0000             RAM_VECTORS		equ		1
+ddt.asm line 0001: Label not found: (RAM_VECTORS)
+ddt.asm line 0001: label value misalligned.           (RAM_VECTORS)
+ddt.asm line 0001: unrecognized instruction.          (RAM_VECTORS)
+0002   0000             	org	0c000h
+ddt.asm line 0002: unrecognized instruction.          (ORG)
+0003   0000 F3          	di					; disable interrupts
+0004   0001             	jmp		ddtStart
+ddt.asm line 0004: unrecognized instruction.          (JMP)
+0005   0001             
+0006   0001             	INCL "main.asm"
+ddt.asm line 0006: unrecognized instruction.          (INCL)
+0007   0001             	INCL "uart.asm"
+ddt.asm line 0007: unrecognized instruction.          (INCL)
+0008   0001             	INCL "vector.asm"
+ddt.asm line 0008: unrecognized instruction.          (INCL)
+0009   0001             	INCL "strings.asm"
+ddt.asm line 0009: unrecognized instruction.          (INCL)
+0010   0001             	INCL "dump.asm"
+ddt.asm line 0010: unrecognized instruction.          (INCL)
+0011   0001             	INCL "move.asm"
+ddt.asm line 0011: unrecognized instruction.          (INCL)
+0012   0001             	INCL "compare.asm"
+ddt.asm line 0012: unrecognized instruction.          (INCL)
+0013   0001             	INCL "search.asm"
+ddt.asm line 0013: unrecognized instruction.          (INCL)
+0014   0001             	INCL "fill.asm"
+ddt.asm line 0014: unrecognized instruction.          (INCL)
+0015   0001             	INCL "unassemble.asm"
+ddt.asm line 0015: unrecognized instruction.          (INCL)
+0016   0001             	INCL "OpCode.asm"
+ddt.asm line 0016: unrecognized instruction.          (INCL)
+0017   0001             	INCL "registers.asm"
+ddt.asm line 0017: unrecognized instruction.          (INCL)
+0018   0001             	INCL "load.asm"
+ddt.asm line 0018: unrecognized instruction.          (INCL)
+0019   0001             	INCL "Trace.asm"
+ddt.asm line 0019: unrecognized instruction.          (INCL)
+0020   0001             	INCL "io.asm"
+ddt.asm line 0020: unrecognized instruction.          (INCL)
+0021   0001             	INCL "enter.asm"
+ddt.asm line 0021: unrecognized instruction.          (INCL)
+0022   0001             	INCL "go.asm"
+ddt.asm line 0022: unrecognized instruction.          (INCL)
+0023   0001             	INCL "cpm.asm"
+ddt.asm line 0023: unrecognized instruction.          (INCL)
+0024   0001             	INCL "help.asm"
+ddt.asm line 0024: unrecognized instruction.          (INCL)
+0025   0001             	INCL "instruction.asm"
+ddt.asm line 0025: unrecognized instruction.          (INCL)
+0026   0001             initmsg:	db	'DDT (Dales debug Tool) for GW8085SBC (8085) v1.0', 0
+ddt.asm line 0026: Label not found: (initmsg)
+ddt.asm line 0026: label value misalligned.           (initmsg)
+ddt.asm line 0026: unrecognized instruction.          (initmsg)
+0027   0001             
+0028   0001             ramStart	equ	$
+ddt.asm line 0028: Label not found: (ramStart)
+ddt.asm line 0028: label value misalligned.           (ramStart)
+ddt.asm line 0028: unrecognized instruction.          (ramStart)
+0029   0001             	INCL	"ram.asm"
+ddt.asm line 0029: unrecognized instruction.          (INCL)
+0030   0001             	endddt.asm line 0030: unrecognized instruction.          (END)
+ line 0030: No END directive before EOF.       
+tasm: Number of errors = 34

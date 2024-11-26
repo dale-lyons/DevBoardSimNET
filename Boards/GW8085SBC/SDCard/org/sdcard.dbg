@@ -1,0 +1,767 @@
+CR		equ	0dh
+LF		equ	0ah
+SPACE		equ	020h
+BACKSPACE	equ	08h
+TAB		equ	09h
+
+
+	org	08000h
+
+	lxi	sp, 09000h
+	call	UartInit
+	call	Reset
+	call	HW_TEST
+	jc	fail
+pass:
+	call	SetMode
+	jc	fail
+
+	call	ConnectDisk
+	jc	fail
+
+	call	MountDisk
+	jc	fail
+
+	lxi	d, file
+	call	OpenFile
+	jc	fail
+
+	lxi	d,fileBuff
+	mvi	c,80h
+	call	readFile
+	jc	fail
+
+	lxi	h,fileBuff
+	mvi	b,80h
+@@:
+	mov	a,m
+;	call	hexOut
+	inx	h
+	dcr	b
+	jnz	@B
+	jmp	done
+fail:
+	lxi	h,no
+	call	printf
+done:
+	lxi	h,alldone
+	call	printf
+@@:	
+	jmp	@B
+alldone:	db	13, 10, 'AllDone!', 13, 10, 0
+no:	db	13, 10, 'test failed!', 13, 10, 0
+file:	db	'/s.aaa', 0
+
+fileBuff:
+	ds	128
+	ds	32
+
+CH_COMMAND_PORT	 	equ 81h
+CH_DATA_PORT		equ 80h
+
+MODE_HOST_1		equ	06h
+
+;--- Commands
+CH_CMD_GET_IC_VER	equ 01h
+CH_CMD_RESET_ALL	equ 05h
+CH_CMD_CHECK_EXIST	equ 06h
+CH_CMD_READ_VAR8	equ 0Ah
+CH_CMD_SET_RETRY	equ 0Bh
+CH_CMD_WRITE_VAR8	equ 0Bh
+CH_CMD_READ_VAR32	equ 0Ch
+CH_CMD_WRITE_VAR32	equ 0Dh
+CH_CMD_DELAY_100US	equ 0Fh
+CH_CMD_SET_USB_ADDR	equ 13h
+CH_CMD_SET_USB_MODE	equ 15h
+CH_CMD_TEST_CONNECT	equ 16h
+CH_CMD_ABORT_NAK	equ 17h
+CH_CMD_GET_STATUS	equ 22h
+CH_CMD_RD_USB_DATA0	equ 27h
+CH_CMD_WR_HOST_DATA	equ 2Ch
+CH_CMD_WR_REQ_DATA	equ 2Dh
+CH_CMD_SET_FILE_NAME	equ 2Fh
+CH_CMD_DISK_CONNECT	equ 30h
+CH_CMD_DISK_MOUNT	equ 31h
+CH_CMD_FILE_OPEN	equ 32h
+CH_CMD_FILE_ENUM_GO	equ 33h
+CH_CMD_FILE_CREATE	equ 34h
+CH_CMD_FILE_ERASE	equ 35h
+CH_CMD_FILE_CLOSE	equ 36h
+CH_CMD_DIR_INFO_READ	equ 37h
+CH_CMD_BYTE_LOCATE	equ 39h
+CH_CMD_BYTE_READ	equ 3Ah
+CH_CMD_BYTE_RD_GO	equ 3Bh
+CH_CMD_BYTE_WRITE	equ 3Ch
+CH_CMD_BYTE_WRITE_GO	equ 3Dh
+CH_CMD_DIR_CREATE	equ 40h
+CH_CMD_SET_ADDRESS	equ 45h
+CH_CMD_GET_DESCR	equ 46h
+CH_CMD_SET_CONFIG	equ 49h
+CH_CMD_ISSUE_TKN_X	equ 4Eh
+
+;--- PIDs
+CH_PID_SETUP		equ 0Dh
+CH_PID_IN		equ 09h
+CH_PID_OUT		equ 01h
+
+;--- Status codes
+CH_ST_INT_SUCCESS	equ 14h
+CH_ST_INT_CONNECT	equ 15h
+CH_ST_INT_DISCONNECT	equ 16h
+
+CH_ST_INT_BUF_OVER	equ 17h
+CH_ST_INT_DISK_READ	equ 1Dh
+CH_ST_INT_DISK_WRITE	equ 1Eh
+CH_ST_INT_DISK_ERR	equ 1Fh
+CH_ST_RET_SUCCESS	equ 51h
+CH_ST_RET_ABORT		equ 5Fh
+
+
+; -----------------------------------------------------------------------------
+; HW_TEST: Check if the USB host controller hardware is operational
+; -----------------------------------------------------------------------------
+; Output: Cy = 0 if hardware is operational, 1 if it's not
+HW_TEST:
+	mvi		a,34h
+	call 		HW_TEST_DO
+	stc
+	rnz
+
+	mvi		a,89h
+	call		HW_TEST_DO
+	stc
+	rnz
+
+	ora	a
+	ret
+
+HW_TEST_DO:
+	mov		b,a
+	mvi		a,CH_CMD_CHECK_EXIST
+	out		CH_COMMAND_PORT
+	mov		a,b
+	xri		0ffh
+	out		CH_DATA_PORT
+	in		CH_DATA_PORT
+	cmp		b
+	ret
+
+Reset:
+	mvi	a,CH_CMD_RESET_ALL
+	out	CH_COMMAND_PORT
+	call	sDelay
+	ret
+
+sDelay:
+	push	b
+	lxi	b,0a000h
+@@:
+	dcx	b
+	mov	a,b
+	ora	c
+	jnz	@B
+	pop	b
+	ret
+
+ConnectDisk:
+	mvi	a,CH_CMD_DISK_CONNECT
+	out	CH_COMMAND_PORT
+	mvi	a,CH_CMD_GET_STATUS
+	out	CH_COMMAND_PORT
+	call	waitForInt
+	ret
+
+MountDisk:
+	mvi	a,CH_CMD_DISK_MOUNT
+	out	CH_COMMAND_PORT
+	mvi	a,CH_CMD_GET_STATUS
+	out	CH_COMMAND_PORT
+	call	waitForInt
+	ret
+
+OpenFile:
+	call	SetFilename
+	rc
+	mvi	a,CH_CMD_FILE_OPEN
+	out	CH_COMMAND_PORT
+	call	waitForInt
+	ret
+
+;Input - de - ptr to filename to set
+;Output cy =0  success
+;          = 1 fail
+SetFilename:
+	push	d
+	mvi	a,CH_CMD_SET_FILE_NAME
+	out	CH_COMMAND_PORT
+@@:
+	ldax	d
+	out	CH_DATA_PORT
+	ora	a
+	jz	@F
+	inx	d
+	jmp	@B
+@@:
+	pop	d
+	call	waitForInt
+	ret
+
+fileSize:
+	mvi	a,CH_CMD_READ_VAR32
+	out	CH_COMMAND_PORT
+	mvi	a,068h
+	out	CH_COMMAND_PORT
+	call	waitForInt
+	rc
+
+	in	CH_DATA_PORT
+	mov	d,a
+	in	CH_DATA_PORT
+	mov	e,a
+	in	CH_DATA_PORT
+	mov	h,a
+	in	CH_DATA_PORT
+	mov	l,a
+	ora	a
+	ret
+
+readResult:
+	mvi	a,CH_CMD_GET_STATUS
+	out	CH_COMMAND_PORT
+	in	CH_DATA_PORT
+	ani	40h
+	jnz	readResult
+
+	in	CH_DATA_PORT
+	call	hexOut
+	call	crlf
+	ret
+
+SetMode:
+	mvi	a,CH_CMD_SET_USB_MODE
+	out	CH_COMMAND_PORT
+	call	waitForInt
+	mvi	a,MODE_HOST_1
+	call	outData
+	call	waitForInt
+	ret
+
+readFile:
+	push	d
+	mvi	a,CH_CMD_BYTE_READ
+	call	sendCommand
+	mvi	a,80h
+	call	outData
+	mvi	a,0
+	call	outData
+	call	sendAndInData
+	cpi	01dh
+	call	hexOut
+	jz	rdf05
+	cpi	014h
+	jz	rdf10
+	jmp	rdf10
+rdf05:
+	mvi	a,27h
+	call	sendCommand
+	call	inData
+	cpi	80h
+	jnc	rdf20
+	pop	h
+	push	h
+	push	psw
+	mvi	b,80h
+@@:
+	mvi	m,0
+	inx	h
+	dcr	b
+	jnz	@B
+
+	pop	psw
+rdf20:
+	pop	h
+	call	inHLRepZ
+
+	push	h
+	mvi	a,CH_CMD_BYTE_RD_GO
+	call	sendCommand
+	mvi	a,CH_CMD_GET_STATUS
+	call	sendCommand
+	call	inData
+	pop	h
+	cmp	a
+	ret
+rdf10:
+	pop	d
+	ori	01h
+	ret
+
+here:
+	push	psw
+	push	h
+	lxi	h,msghere
+	call	printf
+	pop	h
+	pop	psw
+	ret
+msghere:	db	13,10,'Here!!!', 13, 10, 0
+
+inHLRepZ:
+	push	psw
+@@:
+	in	CH_DATA_PORT
+	mov	m,a
+	inx	h
+	dcr	b
+	jnz	@B
+	pop	psw
+	ret
+
+sendAndInData:
+	mvi	a,CH_CMD_GET_STATUS
+	call	sendCommand
+	call	inData
+	ret
+
+sendCommand:
+	out	CH_COMMAND_PORT
+	call	waitForInt
+	ret
+
+inData:
+	in	CH_DATA_PORT
+	ret
+
+outData:
+	out	CH_DATA_PORT
+	call	waitForInt
+	ret
+
+waitForInt:
+	lxi	b,0ea84h
+wfi05:
+	push	b
+	in	CH_COMMAND_PORT
+	ani	10h
+	jnz	@F
+	pop	b
+	ora	a
+	ret
+@@:
+	pop	b
+	dcx	b
+	mov	a,b
+	ora	c
+	jnz	wfi05
+	stc
+	ret
+
+;RESET_65	equ	034h
+;JMP_INSTR	equ	0c3h
+
+UART_DATA_PORT		equ	00h
+UART_STATUS_PORT	equ	01h
+UART_TX_READY		equ	01h
+UART_RX_READY		equ	02h
+
+UartInit:
+	lxi	h,uart
+	mvi	c, UART_SIZE
+@@:
+	mov	a,m
+	out	UART_STATUS_PORT
+	inx	h
+	dcr	c
+	jnz	@B
+
+;	call	UartResetBuffer
+;	mvi	a,JMP_INSTR;
+;	sta	RESET_65
+;	lxi	h,UartRxInt
+;	shld	RESET_65+1
+;	lxi	h,rx_buffer
+;	mvi	a,0dh			; unmask rst 6.5 interrupt
+;	sim
+;	ei
+	ret
+uart:	db	0,0,0,40h,4eh,37h
+UART_SIZE	equ	$-uart
+
+;UartResetBuffer:
+;	push	h
+;	mvi	h,BUFFER_PAGE
+;	mvi	l,0
+;@@:
+;	mvi	m,0aah
+;	inx	h
+;	mov	a,l
+;	ora	a
+;	jnz	@B
+;	sta	rx_begin
+;	sta	rx_end
+;	pop	h
+;	ret
+;UartRxInt:
+;	push	psw
+;	push	h
+;	mvi	h,BUFFER_PAGE
+;	lda	rx_end
+;	mov	l,a
+;	in	UART_DATA_PORT
+;	mov	m,a
+;	inx	h
+;	mov	a,l
+;	sta	rx_end
+;	pop	h
+;	pop	psw
+;	ei
+;	ret
+
+UartStatus:
+UartStatusRx:
+	in	UART_STATUS_PORT
+	ani	UART_RX_READY
+	ret
+
+;UartStatusRx:
+;	push	b
+;	lda	rx_begin
+;	mov	b,a
+;	lda	rx_end
+;	cmp	b
+;	pop	b
+;	ret
+;UartRead:
+;	call	UartStatusRx
+;	jz	UartRead
+;	push	b
+;	push	h
+;	mvi	h,BUFFER_PAGE
+;	lda	rx_begin
+;	mov	l,a
+;	mov	b,m
+;	inx	h
+;	mov	a,l
+;	sta	rx_begin
+;	mov	a,b
+;	pop	h
+;	pop	b
+;	ret
+
+UartRead:
+	call	UartStatusRx
+	jz	UartRead
+	in	UART_DATA_PORT
+	ret
+
+UartWrite:
+	push	psw
+@@:
+	in	UART_STATUS_PORT
+	ani	UART_TX_READY
+	jz	@B
+	pop	psw
+	out	UART_DATA_PORT
+	ret
+
+
+;rx_begin:	db	0
+;rx_end:		db	0
+;BUFFER_PAGE	equ	(($+255)/ 256)
+;	org	BUFFER_PAGE*256
+;rx_buffer:	ds	256
+; returns length of null terminated string
+; hl - ptr to string
+; returns a: length of string
+strlen:
+	push	b
+	push	h
+	mvi	b,0
+strlen05:
+	mov	a,m
+	cpi	0
+	jz	strlen99
+	inx	h
+	inr	b
+	jmp	strlen05
+strlen99:
+	mov	a,b
+	pop	h
+	pop	b
+	ret
+
+; remove leading and traing whitespace from string
+strtrim:
+	push	b
+	push	h
+	push	psw
+strtrm05:
+	mov	a,m
+	ora	a
+	jz	strtrm10
+	call	IsWS
+	jnz	strtrm10
+	call	strRemove
+	jmp	strtrm05
+strtrm10:
+	call	strlen
+	ora	a
+	jz	strtrm99
+
+	push	h
+	call	strend
+	xchg
+	pop	h
+
+	dcx	d
+	ldax	d
+	call	IsWS
+	jnz	strtrm99
+	xra	a
+	stax	d
+	jmp	strtrm10
+strtrm99:
+	pop	psw
+	pop	h
+	pop	b
+	ret
+
+strRemove:
+	push	psw
+	push	h
+	push	d
+	push	h
+	pop	d
+	inx	d
+strrm05:
+	ldax	d
+	mov	m,a
+	inx	d
+	inx	h
+	ora	a
+	jnz	strrm05
+	pop	d
+	pop	h
+	pop	psw
+	ret
+
+; convert charcter to upper case
+upperCase:
+	cpi	'a'
+	jc	upc05
+	cpi	'z'+1
+	jnc	upc05
+	sui	020h
+upc05:
+	ret
+
+; convert charcter to lower case
+lowerCase:
+	cpi	'A'
+	jc	lwc05
+	cpi	'Z'
+	jnc	lwc05
+	adi	020h
+lwc05:
+	ret
+
+; locate end of string
+; hl - str1
+; output - hl - pointer to null terminating byte of str1
+strend:
+	push	d
+	call	strlen
+	mov	e,a
+	mvi	d,0
+	dad	d
+	pop	d
+	ret
+
+; convert string to binary
+; hl - pointer to string
+; output bc - value
+; carry - set: error
+char2bin:
+	push	h
+	lxi	b,0
+@@:
+	mov	a,m
+	ora	a
+	jz	@F
+	call	ascii2Bin
+	jc	@F
+
+	call	shlBC4
+	ani	0fh
+	ora	c
+	mov	c,a
+	inx	h
+	jmp	@B
+@@:
+	pop	h
+	ret
+
+ascii2Bin:
+	call	IsDigit
+	jc	@F
+	sui	'0'
+	ora	a
+	ret
+@@:
+	call	upperCase
+	call	IsHexLetter
+	rc
+	sui	'A'
+	adi	0ah
+	ora	a
+	ret
+
+; shift BC register left 4 bits.
+shlBC4:
+	push	d
+	mvi	e,4
+	call	shlBCe
+	pop	d
+	ret
+
+shlBCe:
+	push	psw
+	push	d
+shl05:
+	stc
+	cmc
+	mov	a,c
+	ral
+	mov	c,a
+	mov	a,b
+	ral
+	mov	b,a
+	dcr	e
+	jnz	shl05
+
+	pop	d
+	pop	psw
+	ret
+
+; Input
+;    hl: command with error
+cmdError:
+	push	h
+	lxi	h, errMsg1
+	call	printf
+	pop	h
+	call	printf
+	lxi	h, errMsg2
+	call	printf
+	call	crlf
+	ret
+errMsg1:	db	'Error in ', 0
+errMsg2:	db	' command', 0
+
+outPrompt:
+	mvi	a,'-'
+	jmp	UartWrite
+
+; print string to console
+; Input
+;   HL - string to print (null terminated)
+; Output
+;   HL byte past end of string
+printf:
+	mov	a,m
+	inx	h
+	ora	a
+	jnz	@F
+	ret
+@@:
+	call	UartWrite
+	jmp	printf
+
+outColon:
+	push	psw
+	mvi	a,':'
+	call	UartWrite
+	pop	psw
+	ret
+
+outSpace:
+	push	psw
+	mvi	a,' '
+	call	UartWrite
+	pop	psw
+	ret
+
+IsHexDigit:
+	call	IsDigit
+	rnc
+	call	IsHexLetter
+	ret
+IsDigit:
+	cpi	'0'
+	rc
+	cpi	'9'+1
+	cmc
+	ret
+IsHexLetter:
+	cpi	'A'
+	rc
+	cpi	'Z'
+	cmc
+	ret
+IsWS:
+	ora	a
+	rz
+	cpi	SPACE
+	rz
+	cpi	TAB
+	rz
+	cpi	CR
+	rz
+	cpi	LF
+	ret
+
+crlf:
+	push	psw
+	mvi	a,CR
+	call	UartWrite
+	mvi	a,LF
+	call	UartWrite
+	pop	psw
+	ret
+
+; hl has number
+dhexOut:
+	mov	a,h
+	call	hexOut
+	mov	a,l
+	call	hexOut
+	ret
+hexOut:
+	push	psw
+	push	b
+	mov	c,a
+	rar
+	rar
+	rar
+	rar
+	ani	0fh
+	call	nibbleToAscii
+	call	UartWrite
+	mov	a,c
+	ani	0fh
+	call	nibbleToAscii
+	call	UartWrite
+	pop	b
+	pop	psw
+	ret
+
+nibbleToAscii:
+	cpi		0ah
+	jc		@F
+	adi		07
+@@:
+	adi		30h
+	ret
+
+	end
+

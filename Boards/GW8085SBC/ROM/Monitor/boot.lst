@@ -1,0 +1,32 @@
+   c000                 DDT_START		equ	0c000h
+   0008                 ROM_BOOT_BIT		equ	08h
+   0010                 ROM_ENABLE_BIT		equ	10h
+   0080                 USER_LED_BIT		equ	80h
+   1000                 RAM_BOOT		equ	01000h
+                        
+   f000                 	org	0f000h
+   f000                 start:
+   f000   c3 03 f0      	jmp	boot1
+   f003                 boot1:
+                        	; Rom on, bank 0, user light on
+   f003   3e 10         	mvi	a,ROM_ENABLE_BIT
+   f005   d3 02         	out	02h
+   f007   21 00 10      	lxi	h,RAM_BOOT
+   f00a   11 1d f0      	lxi	d,preload
+   f00d   01 00 04      	lxi	b,1024
+   f010                 boot2:
+   f010   1a            	ldax		d
+   f011   77            	mov		m,a
+   f012   13            	inx		d
+   f013   23            	inx		h
+   f014   0b            	dcx		b
+   f015   78            	mov		a,b
+   f016   b1            	ora		c
+   f017   c2 10 f0      	jnz		boot2
+   f01a   c3 00 10      	jmp		RAM_BOOT
+   f01d                 preload:
+   f01d                 	end
+c000  DDT_START     1000  RAM_BOOT      0008  ROM_BOOT_BIT    0010  ROM_ENABLE_BIT
+0080  USER_LED_BIT    f003  boot1         f010  boot2         f01d  preload   
+f000  start         
+
