@@ -89,7 +89,6 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>copy $(TargetDir)$(TargetFileName) $(SolutionDir)$(OutDir)
-copy $(TargetDir)$(TargetName).pdb $(SolutionDir)$(OutDir)
-copy $(ProjectDir)Freeasm11\Win32\*.exe $(SolutionDir)$(OutDir)\Assemblers</PostBuildEvent>
+copy $(TargetDir)$(TargetName).pdb $(SolutionDir)$(OutDir)</PostBuildEvent>
   </PropertyGroup>
 </Project>
