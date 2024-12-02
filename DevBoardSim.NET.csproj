@@ -181,6 +181,7 @@
     <EmbeddedResource Include="Resources\images.jpg" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="README.md" />
     <None Include="Resources\Image1.jpg" />
   </ItemGroup>
   <ItemGroup>
