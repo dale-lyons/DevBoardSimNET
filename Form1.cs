@@ -483,5 +483,31 @@ namespace DevBoardSim.NET
             CPUSpeed.Text = string.Format("Cycles Per Second {0}K", speed);
         }
 
+        private void debugToolStripMenuItem_DropDownOpening(object sender, EventArgs e)
+        {
+            bool enabled = (Processor != null && !Processor.IsRunning && !Processor.IsHalted);
+
+            var tsm = (sender as ToolStripMenuItem);
+            var items = tsm.DropDownItems;
+            foreach (var item in items)
+            {
+                ToolStripMenuItem tsmi = item as ToolStripMenuItem;
+                if (tsmi == null)
+                    continue;
+                switch (tsmi.Text)
+                {
+                    case "Step Into":
+                    case "&Step Over":
+                    case "&Go":
+                        tsmi.Enabled = enabled;
+                        break;
+                    case "Stop":
+                        tsmi.Enabled = !enabled;
+                        break;
+                    default:
+                        break;
+                }
+            }//foreach
+        }
     }
 }

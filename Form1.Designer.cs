@@ -153,16 +153,16 @@
             // 
             this.registersToolStripMenuItem.CheckOnClick = true;
             this.registersToolStripMenuItem.Name = "registersToolStripMenuItem";
-            this.registersToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
-            this.registersToolStripMenuItem.Text = "&Registers";
+            this.registersToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.registersToolStripMenuItem.Tag = "Registers";
+            this.registersToolStripMenuItem.Text = "&Registers";
             this.registersToolStripMenuItem.Click += new System.EventHandler(this.toolStripMenuItem_Click);
             // 
             // outputToolStripMenuItem
             // 
             this.outputToolStripMenuItem.CheckOnClick = true;
             this.outputToolStripMenuItem.Name = "outputToolStripMenuItem";
-            this.outputToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.outputToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.outputToolStripMenuItem.Tag = "Output";
             this.outputToolStripMenuItem.Text = "&Output";
             this.outputToolStripMenuItem.Click += new System.EventHandler(this.toolStripMenuItem_Click);
@@ -171,7 +171,7 @@
             // 
             this.memoryToolStripMenuItem.CheckOnClick = true;
             this.memoryToolStripMenuItem.Name = "memoryToolStripMenuItem";
-            this.memoryToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.memoryToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.memoryToolStripMenuItem.Tag = "Memory";
             this.memoryToolStripMenuItem.Text = "&Memory";
             this.memoryToolStripMenuItem.Click += new System.EventHandler(this.toolStripMenuItem_Click);
@@ -180,7 +180,7 @@
             // 
             this.pluginsToolStripMenuItem.CheckOnClick = true;
             this.pluginsToolStripMenuItem.Name = "pluginsToolStripMenuItem";
-            this.pluginsToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.pluginsToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.pluginsToolStripMenuItem.Tag = "Board";
             this.pluginsToolStripMenuItem.Text = "&Board";
             this.pluginsToolStripMenuItem.Click += new System.EventHandler(this.toolStripMenuItem_Click);
@@ -188,7 +188,7 @@
             // opCodeTraceToolStripMenuItem
             // 
             this.opCodeTraceToolStripMenuItem.Name = "opCodeTraceToolStripMenuItem";
-            this.opCodeTraceToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.opCodeTraceToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.opCodeTraceToolStripMenuItem.Tag = "OpCodeTrace";
             this.opCodeTraceToolStripMenuItem.Text = "&OpCodeTrace";
             this.opCodeTraceToolStripMenuItem.Click += new System.EventHandler(this.toolStripMenuItem_Click);
@@ -196,13 +196,13 @@
             // breakpoiiintsToolStripMenuItem
             // 
             this.breakpoiiintsToolStripMenuItem.Name = "breakpoiiintsToolStripMenuItem";
-            this.breakpoiiintsToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.breakpoiiintsToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.breakpoiiintsToolStripMenuItem.Text = "Breakpoints";
             // 
             // watchToolStripMenuItem
             // 
             this.watchToolStripMenuItem.Name = "watchToolStripMenuItem";
-            this.watchToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.watchToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.watchToolStripMenuItem.Tag = "Watch";
             this.watchToolStripMenuItem.Text = "Watch";
             this.watchToolStripMenuItem.Click += new System.EventHandler(this.toolStripMenuItem_Click);
@@ -210,7 +210,7 @@
             // stackToolStripMenuItem
             // 
             this.stackToolStripMenuItem.Name = "stackToolStripMenuItem";
-            this.stackToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.stackToolStripMenuItem.Size = new System.Drawing.Size(145, 22);
             this.stackToolStripMenuItem.Tag = "Stack";
             this.stackToolStripMenuItem.Text = "Stack";
             this.stackToolStripMenuItem.Click += new System.EventHandler(this.toolStripMenuItem_Click);
@@ -229,12 +229,13 @@
             this.debugToolStripMenuItem.Name = "debugToolStripMenuItem";
             this.debugToolStripMenuItem.Size = new System.Drawing.Size(54, 20);
             this.debugToolStripMenuItem.Text = "&Debug";
+            this.debugToolStripMenuItem.DropDownOpening += new System.EventHandler(this.debugToolStripMenuItem_DropDownOpening);
             // 
             // stepOverToolStripMenuItem
             // 
             this.stepOverToolStripMenuItem.Name = "stepOverToolStripMenuItem";
             this.stepOverToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F10;
-            this.stepOverToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+            this.stepOverToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.stepOverToolStripMenuItem.Text = "&Step Over";
             this.stepOverToolStripMenuItem.Click += new System.EventHandler(this.stepOverToolStripMenuItem_Click);
             // 
@@ -242,7 +243,7 @@
             // 
             this.goToolStripMenuItem.Name = "goToolStripMenuItem";
             this.goToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F5;
-            this.goToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+            this.goToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.goToolStripMenuItem.Text = "&Go";
             this.goToolStripMenuItem.Click += new System.EventHandler(this.goToolStripMenuItem_Click);
             // 
@@ -250,39 +251,39 @@
             // 
             this.stepIntoToolStripMenuItem.Name = "stepIntoToolStripMenuItem";
             this.stepIntoToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F11;
-            this.stepIntoToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+            this.stepIntoToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.stepIntoToolStripMenuItem.Text = "Step Into";
             this.stepIntoToolStripMenuItem.Click += new System.EventHandler(this.stepIntoToolStripMenuItem_Click);
             // 
             // stopToolStripMenuItem
             // 
             this.stopToolStripMenuItem.Name = "stopToolStripMenuItem";
-            this.stopToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+            this.stopToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.stopToolStripMenuItem.Text = "Stop";
             this.stopToolStripMenuItem.Click += new System.EventHandler(this.stopToolStripMenuItem_Click);
             // 
             // createBootBinToolStripMenuItem
             // 
             this.createBootBinToolStripMenuItem.Name = "createBootBinToolStripMenuItem";
-            this.createBootBinToolStripMenuItem.Size = new System.Drawing.Size(154, 6);
+            this.createBootBinToolStripMenuItem.Size = new System.Drawing.Size(177, 6);
             // 
             // resetToolStripMenuItem
             // 
             this.resetToolStripMenuItem.Name = "resetToolStripMenuItem";
-            this.resetToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+            this.resetToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.resetToolStripMenuItem.Text = "Restart";
             // 
             // loadHexFileToolStripMenuItem
             // 
             this.loadHexFileToolStripMenuItem.Name = "loadHexFileToolStripMenuItem";
-            this.loadHexFileToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+            this.loadHexFileToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.loadHexFileToolStripMenuItem.Text = "Load Hex File";
             this.loadHexFileToolStripMenuItem.Click += new System.EventHandler(this.loadHexFileToolStripMenuItem_Click);
             // 
             // loadBinaryFileToolStripMenuItem
             // 
             this.loadBinaryFileToolStripMenuItem.Name = "loadBinaryFileToolStripMenuItem";
-            this.loadBinaryFileToolStripMenuItem.Size = new System.Drawing.Size(157, 22);
+            this.loadBinaryFileToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.loadBinaryFileToolStripMenuItem.Text = "Load Binary File";
             this.loadBinaryFileToolStripMenuItem.Click += new System.EventHandler(this.loadBinaryFileToolStripMenuItem_Click);
             // 
