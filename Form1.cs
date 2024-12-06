@@ -125,32 +125,53 @@ namespace DevBoardSim.NET
             CodeView.Show(dockPanel);
             updateCPUStatus(Color.Red, "Stopped");
 
-            //DEBUG
-            var filename = @"C:\Projects\DevBoardSimNET\Boards\MicroBeast\Firmware\firmware.asm";
-            var parser = Parsers.Parsers.GetParser(Processor.ParserName, Processor);
-            var parseSettings = new ParseSettings { Listing = true, Bin = true, Path = Path.GetDirectoryName(filename) };
-            parser.Parse(filename, parseSettings);
-            if (parser.Errors.Count > 0)
+            if (mPreferencesConfig.ActiveBoard == "GW8085SBC.GW8085SBCBoard")
             {
-                var ov = OutputView;
-                foreach (var error in parser.Errors)
-                    ov.WriteLine(string.Format("Compile errror Line:{0} Text:{1}", error.Line, error.Text));
-                MessageBox.Show("Error on assembly!");
+                var filename = @"C:\Projects\DevBoardSimNET\Boards\GW8085SBC\ROM\Monitor\ddt.asm";
+                var parser = Parsers.Parsers.GetParser(Processor.ParserName, Processor);
+                if (parser == null)
+                    return;
+                var parseSettings = new ParseSettings { Listing = true, Bin = true, Path = Path.GetDirectoryName(filename) };
+                parser.Parse(filename, parseSettings);
+                if (parser.Errors.Count > 0)
+                {
+                    var ov = OutputView;
+                    foreach (var error in parser.Errors)
+                        ov.WriteLine(string.Format("Compile errror Line:{0} Text:{1}", error.Line, error.Text));
+                    MessageBox.Show("Error on assembly!");
+                }
+                CodeView.AddCompiledCode(parser, true);
             }
-            CodeView.AddCompiledCode(parser, true);
 
-            filename = @"C:\Projects\DevBoardSimNET\Boards\MicroBeast\Firmware\build\monitor.asm";
-            parser = Parsers.Parsers.GetParser(Processor.ParserName, Processor);
-            parseSettings = new ParseSettings { Listing = true, Bin = true, Path = Path.GetDirectoryName(filename) };
-            parser.Parse(filename, parseSettings);
-            if (parser.Errors.Count > 0)
+            //DEBUG
+            else if (mPreferencesConfig.ActiveBoard == "MicroBeast.MicroBeastboard")
             {
-                var ov = OutputView;
-                foreach (var error in parser.Errors)
-                    ov.WriteLine(string.Format("Compile errror Line:{0} Text:{1}", error.Line, error.Text));
-                MessageBox.Show("Error on assembly!");
+                var filename = @"C:\Projects\DevBoardSimNET\Boards\MicroBeast\Firmware\firmware.asm";
+                var parser = Parsers.Parsers.GetParser(Processor.ParserName, Processor);
+                var parseSettings = new ParseSettings { Listing = true, Bin = true, Path = Path.GetDirectoryName(filename) };
+                parser.Parse(filename, parseSettings);
+                if (parser.Errors.Count > 0)
+                {
+                    var ov = OutputView;
+                    foreach (var error in parser.Errors)
+                        ov.WriteLine(string.Format("Compile errror Line:{0} Text:{1}", error.Line, error.Text));
+                    MessageBox.Show("Error on assembly!");
+                }
+                CodeView.AddCompiledCode(parser, true);
+
+                filename = @"C:\Projects\DevBoardSimNET\Boards\MicroBeast\Firmware\build\monitor.asm";
+                parser = Parsers.Parsers.GetParser(Processor.ParserName, Processor);
+                parseSettings = new ParseSettings { Listing = true, Bin = true, Path = Path.GetDirectoryName(filename) };
+                parser.Parse(filename, parseSettings);
+                if (parser.Errors.Count > 0)
+                {
+                    var ov = OutputView;
+                    foreach (var error in parser.Errors)
+                        ov.WriteLine(string.Format("Compile errror Line:{0} Text:{1}", error.Line, error.Text));
+                    MessageBox.Show("Error on assembly!");
+                }
+                CodeView.AddCompiledCode(parser, true);
             }
-            CodeView.AddCompiledCode(parser, true);
 
             //string filename = @"C:\Projects\6502\nes-test-roms-master\instr_test-v5\source\dale.nes";
             //var bytes = File.ReadAllBytes(filename);
@@ -166,25 +187,6 @@ namespace DevBoardSim.NET
             //var parseSettings = new ParseSettings { Listing = true, Bin = true, Path = Path.GetDirectoryName(filename) };
             //parser.Parse(filename, parseSettings);
 
-            //var filename = @"C:\Projects\DevBoardSimNET\Boards\GW8085SBC\ROM\Monitor\ddt.asm";
-            //var parser = Parsers.Parsers.GetParser(Processor.ParserName, Processor);
-            //if (parser == null)
-            //    return;
-            //var parseSettings = new ParseSettings { Listing = true, Bin = true, Path = Path.GetDirectoryName(filename) };
-            //parser.Parse(filename, parseSettings);
-            //var filename = @"C:\Projects\DevBoardSimNET\Processors\ARM7\TestFiles\dale.s";
-            //var parser = Processor.CreateParser();
-            //var parseSettings = new ParseSettings { Listing = true, Bin = true, Path = Path.GetDirectoryName(filename) };
-            //parser.Parse(filename, parseSettings);
-
-            //if (parser.Errors.Count > 0)
-            //{
-            //    var ov = OutputView;
-            //    foreach (var error in parser.Errors)
-            //        ov.WriteLine(string.Format("Compile errror Line:{0} Text:{1}", error.Line, error.Text));
-            //    MessageBox.Show("Error on assembly!");
-            //}
-            //CodeView.AddCompiledCode(parser, true);
             RefreshAllViews();
         }
 
@@ -365,8 +367,9 @@ namespace DevBoardSim.NET
             if (dialog.ShowDialog() != DialogResult.OK)
                 return;
 
-            HexFile hf = new HexFile();
-            hf.Load(dialog.FileName);
+            var hf = HexFile.Load(dialog.FileName);
+            if (hf == null)
+                return;
             //CodeView.AddBinaryCode(hf.Bytes, hf.StartAddress, hf.EndAddress);
             RefreshAllViews();
         }
@@ -409,8 +412,9 @@ namespace DevBoardSim.NET
             if (dialog.ShowDialog() != DialogResult.OK)
                 return;
 
-            HexFile hf = new HexFile();
-            hf.Load(dialog.FileName);
+            var hf = HexFile.Load(dialog.FileName);
+            if (hf == null)
+                return;
 
             string binName = Path.ChangeExtension(dialog.FileName, "bin");
             using (var stream = File.Create(binName))
@@ -425,15 +429,14 @@ namespace DevBoardSim.NET
             if (dialog.ShowDialog() != DialogResult.OK)
                 return;
 
-            HexFile hf = new HexFile();
-            hf.Load(Path.ChangeExtension(dialog.FileName, ".ihx"));
+            var hf = HexFile.Load(Path.ChangeExtension(dialog.FileName, ".ihx"));
+            if (hf == null)
+                return;
 
             var parser = Parsers.Parsers.GetParser(Processor.ParserName, Processor);
             var codeLines = parser.ParseListingFile(Path.ChangeExtension(dialog.FileName, ".lst"));
             //            CodeView.AddCompiledCode(Processor, codeLines, hf);
             RefreshAllViews();
-
-
         }
 
         private void stepOverToolStripMenuItem_Click(object sender, EventArgs e)
@@ -474,13 +477,12 @@ namespace DevBoardSim.NET
 
         private void timer1_Tick(object sender, EventArgs e)
         {
-            var elapsedSpan = new TimeSpan(DateTime.Now.Ticks - tmrTicksStart);
-            long cycles = Processor.CycleCount;
-            if (cycles <= 0)
-                return;
-
-            var speed = (int)(cycles / elapsedSpan.TotalSeconds / 1000);
-            CPUSpeed.Text = string.Format("Cycles Per Second {0}K", speed);
+            var now = DateTime.Now;
+            var elapsedSpan = new TimeSpan(now.Ticks - tmrTicksStart);
+            //tmrTicksStart = now.Ticks;
+            ulong cycles = Processor.CycleCount;
+            var speed = cycles / elapsedSpan.TotalSeconds / 1000000;
+            CPUSpeed.Text = string.Format("Cycles Per Second {0:0.00}MHz", speed);
         }
 
         private void debugToolStripMenuItem_DropDownOpening(object sender, EventArgs e)

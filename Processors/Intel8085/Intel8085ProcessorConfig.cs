@@ -13,7 +13,7 @@ namespace Intel8085
     public class Intel8085ProcessorConfig : PreferencesBase
     {
         public static string Key = "Intel 8085 Processor Settings";
-        public static string DefaultParser = "ParserAsm11.ParserAsm11";
+        public static string DefaultParser = "ParserAsm85.ParserAsm85";
 
         [Editor(typeof(ActiveParserEditor), typeof(UITypeEditor))]
         [Description("The Parser to use for this processor.")]

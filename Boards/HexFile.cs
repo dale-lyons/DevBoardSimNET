@@ -29,16 +29,17 @@ namespace Boards
             }
         }
 
-        public bool Load(string filename)
+        public static HexFile Load(string filename)
         {
-            StartAddress = ushort.MaxValue;
+            var ret = new HexFile();
+            ret.StartAddress = ushort.MaxValue;
 
             if (!File.Exists(filename))
-                return false;
+                return null;
 
-            Bytes = new byte[64 * 1024];
-            for (int ii = 0; ii < Bytes.Length; ii++)
-                Bytes[ii] = 0xff;
+            ret.Bytes = new byte[64 * 1024];
+            for (int ii = 0; ii < ret.Bytes.Length; ii++)
+                ret.Bytes[ii] = 0xff;
 
             var lines = File.ReadAllLines(filename);
             int index = 0;
@@ -53,17 +54,16 @@ namespace Boards
                 ushort addr = ushort.Parse(str.Substring(3, 4), System.Globalization.NumberStyles.HexNumber, null);
 
                 if (index == 1)
-                    StartAddress = addr;
+                    ret.StartAddress = addr;
 
                 for (int ii = 0; ii < count; ii++)
                 {
                     byte data = byte.Parse(str.Substring((ii * 2) + 9, 2), System.Globalization.NumberStyles.HexNumber, null);
-                    Bytes[addr++] = data;
+                    ret.Bytes[addr++] = data;
                 }
-                //if(index == lines.Length-1)
-                EndAddress = Math.Max(EndAddress, (ushort)(addr));
+                ret.EndAddress = Math.Max(ret.EndAddress, addr);
             }
-            return true;
+            return ret;
         }
 
         public IList<Tuple<ushort, byte, byte>> CompareTo(string fileName)

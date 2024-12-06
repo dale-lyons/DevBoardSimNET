@@ -41,7 +41,7 @@ namespace ARM7
         //exception numbers are defined in:ARMExceptions
         protected ARMExceptions mRequestedException;
         
-        public long CycleCount { get; set; }
+        public ulong CycleCount { get; set; }
 
         public CPSR CPSR { get { return GPR.CPSR; } }
         public IList<IInstructionTest> GetInstructionTests() { return null; }

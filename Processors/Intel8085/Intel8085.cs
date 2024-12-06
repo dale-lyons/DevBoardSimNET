@@ -18,17 +18,11 @@ namespace Intel8085
 
         private EventWaitHandle mAbort;
         private Thread mThread;
-        public long CycleCount { get; set; }
+        public ulong CycleCount { get; set; }
 
         public event InvalidInstructionDelegate OnInvalidInstruction;
 
         public event CycleCountDelegate OnCycleCount;
-
-        //        private int mResetFired;
-        //        private int mTrapFired;
-        //        private int m55Fired;
-        //        private int m65Fired;
-        //        private int m75Fired;
 
         public IRegisters Registers { get; set; }
 

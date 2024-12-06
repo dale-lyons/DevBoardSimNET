@@ -116,7 +116,7 @@ namespace Processors
         event CycleCountDelegate OnCycleCount;
         event InvalidInstructionDelegate OnInvalidInstruction;
         IRegistersView RegistersView { get; }
-        long CycleCount { get; set; }
+        ulong CycleCount { get; set; }
         string[] DoubleRegisters();
 
         IList<IInstructionTest> GetInstructionTests();

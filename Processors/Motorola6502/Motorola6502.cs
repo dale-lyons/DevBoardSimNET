@@ -18,7 +18,7 @@ namespace Motorola6502
         private EventWaitHandle mAbort;
         private Thread mThread;
         private bool threadDone;
-        public long CycleCount { get; set; }
+        public ulong CycleCount { get; set; }
 
         private string mPendingInterrupt = string.Empty;
 

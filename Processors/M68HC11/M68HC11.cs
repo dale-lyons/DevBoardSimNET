@@ -33,7 +33,7 @@ namespace M68HC11
         public ISystemMemory SystemMemory { get; set; }
 
         public event CycleCountDelegate OnCycleCount;
-        public long CycleCount { get; set; }
+        public ulong CycleCount { get; set; }
         public Breakpoints Breakpoints { get; private set; }
 
         private IRegistersView mIRegistersView;
